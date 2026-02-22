@@ -8,6 +8,10 @@ const TD_STORAGE_KEY = "td";
 const REMINDER_CHECK_INTERVAL_MS = 30_000;
 const DEFAULT_REMIND_AFTER_MIN = 1;
 const DEFAULT_SNOOZE_MIN = 30;
+const DEFAULT_TIMER_HOURS = 0;
+const DEFAULT_TIMER_MINUTES = 5;
+
+type TimeMode = "stopwatch" | "timer";
 
 type TdState = {
   lastSentAtMs: number;
@@ -55,6 +59,27 @@ function loadTdState(): TdState {
   }
 }
 
+function formatElapsed(ms: number): string {
+  const totalSeconds = Math.floor(ms / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) {
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function formatTwoDigits(value: number): string {
+  return String(value).padStart(2, "0");
+}
+
+function parseTimerInput(value: string, max: number): number {
+  const numericValue = Number(value.replace(/[^\d]/g, ""));
+  if (!Number.isFinite(numericValue) || numericValue < 0) return 0;
+  return Math.min(max, Math.floor(numericValue));
+}
+
 function App() {
   const apiBase = useMemo(
     () => (import.meta.env.VITE_API_BASE_URL as string) || "http://127.0.0.1:3001",
@@ -72,9 +97,21 @@ function App() {
   const [user, setUser] = useState("teamK");
   const [sending, setSending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [clockOpen, setClockOpen] = useState(false);
+  const [selectedTimeMode, setSelectedTimeMode] = useState<TimeMode>("stopwatch");
+  const [activeTimeMode, setActiveTimeMode] = useState<TimeMode | null>(null);
+  const [timeRunning, setTimeRunning] = useState(false);
+  const [timeStartedAtMs, setTimeStartedAtMs] = useState<number | null>(null);
+  const [elapsedBeforePauseMs, setElapsedBeforePauseMs] = useState(0);
+  const [activeTimerDurationMs, setActiveTimerDurationMs] = useState(0);
+  const [timeDisplayMs, setTimeDisplayMs] = useState(0);
+  const [timerNoticeVisible, setTimerNoticeVisible] = useState(false);
+  const [timerHoursInput, setTimerHoursInput] = useState(formatTwoDigits(DEFAULT_TIMER_HOURS));
+  const [timerMinutesInput, setTimerMinutesInput] = useState(formatTwoDigits(DEFAULT_TIMER_MINUTES));
   const pointerDown = useRef<{ x: number; y: number } | null>(null);
   const dragged = useRef(false);
   const statusRef = useRef<HTMLDivElement | null>(null);
+  const clockRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLElement | null>(null);
 
   async function resizeWindow() {
@@ -107,7 +144,7 @@ function App() {
 
   useEffect(() => {
     void resizeWindow();
-  }, [isOpen, reminderVisible, statusOpen, message, text.length, sending]);
+  }, [isOpen, reminderVisible, statusOpen, clockOpen, message, text.length, sending]);
 
   useEffect(() => {
     localStorage.setItem(
@@ -140,15 +177,83 @@ function App() {
   useEffect(() => {
     function handleOutsideClick(event: MouseEvent) {
       const target = event.target as Node | null;
-      if (!statusRef.current || !target) return;
-      if (!statusRef.current.contains(target)) {
+      if (!target) return;
+      if (statusRef.current && !statusRef.current.contains(target)) {
         setStatusOpen(false);
+      }
+      if (clockRef.current && !clockRef.current.contains(target)) {
+        setClockOpen(false);
       }
     }
 
     window.addEventListener("mousedown", handleOutsideClick);
     return () => window.removeEventListener("mousedown", handleOutsideClick);
   }, []);
+
+  useEffect(() => {
+    if (!timeRunning || !timeStartedAtMs || !activeTimeMode) return;
+
+    const intervalId = window.setInterval(() => {
+      const elapsedMs = elapsedBeforePauseMs + (Date.now() - timeStartedAtMs);
+      if (activeTimeMode === "stopwatch") {
+        setTimeDisplayMs(elapsedMs);
+        return;
+      }
+      const remainingMs = Math.max(0, activeTimerDurationMs - elapsedMs);
+      setTimeDisplayMs(remainingMs);
+      if (remainingMs === 0) {
+        setTimeRunning(false);
+        setActiveTimeMode(null);
+        setElapsedBeforePauseMs(0);
+        setTimerNoticeVisible(true);
+      }
+    }, 200);
+
+    return () => window.clearInterval(intervalId);
+  }, [timeRunning, timeStartedAtMs, activeTimeMode, activeTimerDurationMs, elapsedBeforePauseMs]);
+
+  const timerHours = parseTimerInput(timerHoursInput, 99);
+  const timerMinutes = parseTimerInput(timerMinutesInput, 59);
+  const timerDurationMs = (timerHours * 60 * 60 + timerMinutes * 60) * 1000;
+  const startTimerDisabled = selectedTimeMode === "timer" && timerDurationMs <= 0;
+
+  function startTime() {
+    const now = Date.now();
+    if (selectedTimeMode === "timer" && timerDurationMs <= 0) {
+      setMessage("Timerは1分以上で設定してください");
+      return;
+    }
+
+    setMessage(null);
+    setActiveTimeMode(selectedTimeMode);
+    setTimeRunning(true);
+    setTimeStartedAtMs(now);
+    setElapsedBeforePauseMs(0);
+    setActiveTimerDurationMs(selectedTimeMode === "timer" ? timerDurationMs : 0);
+    setTimeDisplayMs(selectedTimeMode === "stopwatch" ? 0 : timerDurationMs);
+    setTimerNoticeVisible(false);
+    setClockOpen(false);
+  }
+
+  function togglePauseResume() {
+    if (!activeTimeMode) return;
+
+    if (timeRunning && timeStartedAtMs) {
+      const newElapsedMs = elapsedBeforePauseMs + (Date.now() - timeStartedAtMs);
+      setElapsedBeforePauseMs(newElapsedMs);
+      setTimeStartedAtMs(null);
+      setTimeRunning(false);
+      if (activeTimeMode === "stopwatch") {
+        setTimeDisplayMs(newElapsedMs);
+      } else {
+        setTimeDisplayMs(Math.max(0, activeTimerDurationMs - newElapsedMs));
+      }
+      return;
+    }
+
+    setTimeStartedAtMs(Date.now());
+    setTimeRunning(true);
+  }
 
   async function handleCharacterPointerDown(event: PointerEvent<HTMLButtonElement>) {
     pointerDown.current = { x: event.clientX, y: event.clientY };
@@ -233,7 +338,17 @@ function App() {
         >
           <span className="character-face">🐣</span>
         </button>
-        {reminderVisible && !isOpen ? (
+        {timerNoticeVisible ? (
+          <aside className="timer-bubble">
+            <p>タイマー終了！</p>
+            <div className="reminder-actions">
+              <button onClick={() => setTimerNoticeVisible(false)} type="button">
+                OK
+              </button>
+            </div>
+          </aside>
+        ) : null}
+        {!timerNoticeVisible && reminderVisible && !isOpen ? (
           <aside className="reminder-bubble">
             <p>そろそろ思考をメモする？</p>
             <div className="reminder-actions">
@@ -264,10 +379,91 @@ function App() {
       </div>
 
       <section className={`panel ${isOpen ? "open" : "hidden"}`} ref={panelRef}>
-        <header className="panel-header" data-tauri-drag-region>
-          <div className="drag-handle" title="drag" />
+        <header className="panel-header">
+          <div className="drag-handle" data-tauri-drag-region title="drag" />
           <p className="eyebrow">Thought Drop</p>
-          <h1>今の思考をそのまま送る</h1>
+          <div className="title-row">
+            <h1>今の思考をそのまま送る</h1>
+            <div className="clock-controls" ref={clockRef}>
+              <div className={`clock-pill ${activeTimeMode ? "active" : ""}`}>
+                {activeTimeMode ? (
+                  <button className="pause-inline" onClick={togglePauseResume} type="button">
+                    <span className={`pause-symbol ${timeRunning ? "stop" : "play"}`}>
+                      {timeRunning ? "⏸" : "▶"}
+                    </span>
+                  </button>
+                ) : null}
+                <div className="clock-widget">
+                  <button className="clock-trigger" onClick={() => setClockOpen((current) => !current)} type="button">
+                    {activeTimeMode ? (
+                      <span className="clock-time">{formatElapsed(timeDisplayMs)}</span>
+                    ) : (
+                      <span aria-hidden className="clock-icon">
+                        <span className="clock-icon-ring" />
+                        <span className="clock-icon-hand hour" />
+                        <span className="clock-icon-hand minute" />
+                      </span>
+                    )}
+                  </button>
+                  {clockOpen ? (
+                    <div className="clock-menu">
+                      <div className="clock-mode-buttons">
+                        <button
+                          className={selectedTimeMode === "stopwatch" ? "active" : ""}
+                          onClick={() => setSelectedTimeMode("stopwatch")}
+                          type="button"
+                        >
+                          Stopwatch
+                        </button>
+                        <button
+                          className={selectedTimeMode === "timer" ? "active" : ""}
+                          onClick={() => setSelectedTimeMode("timer")}
+                          type="button"
+                        >
+                          Timer
+                        </button>
+                      </div>
+                      {selectedTimeMode === "timer" ? (
+                        <div className="timer-inputs">
+                          <label htmlFor="timer-hours-input">
+                            <input
+                              id="timer-hours-input"
+                              inputMode="numeric"
+                              maxLength={2}
+                              onBlur={() => setTimerHoursInput(formatTwoDigits(timerHours))}
+                              onChange={(event) =>
+                                setTimerHoursInput(event.currentTarget.value.replace(/[^\d]/g, "").slice(0, 2))
+                              }
+                              type="text"
+                              value={timerHoursInput}
+                            />
+                            h
+                          </label>
+                          <label htmlFor="timer-minutes-input">
+                            <input
+                              id="timer-minutes-input"
+                              inputMode="numeric"
+                              maxLength={2}
+                              onBlur={() => setTimerMinutesInput(formatTwoDigits(timerMinutes))}
+                              onChange={(event) =>
+                                setTimerMinutesInput(event.currentTarget.value.replace(/[^\d]/g, "").slice(0, 2))
+                              }
+                              type="text"
+                              value={timerMinutesInput}
+                            />
+                            m
+                          </label>
+                        </div>
+                      ) : null}
+                      <button className="clock-start" disabled={startTimerDisabled} onClick={startTime} type="button">
+                        Start {selectedTimeMode}
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          </div>
         </header>
 
         <div className="field">
@@ -327,16 +523,18 @@ function App() {
           />
         </div>
 
-        <div className="field">
-          <label htmlFor="memo-input">メモ</label>
+        <div className="field memo-field">
+          <div className="memo-head">
+            <label htmlFor="memo-input">メモ</label>
+          </div>
+          <textarea
+            id="memo-input"
+            rows={5}
+            value={text}
+            onChange={(event) => setText(event.currentTarget.value)}
+            placeholder="いまの思考/詰まりをそのまま書く"
+          />
         </div>
-        <textarea
-          id="memo-input"
-          rows={5}
-          value={text}
-          onChange={(event) => setText(event.currentTarget.value)}
-          placeholder="いまの思考/詰まりをそのまま書く"
-        />
 
         <footer className="panel-footer">
           <p className="counter">{text.trim().length} chars</p>
