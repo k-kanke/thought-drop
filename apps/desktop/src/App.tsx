@@ -4,24 +4,71 @@ import "./App.css";
 
 type Status = "集中" | "調査中" | "詰まり" | "レビュー待ち";
 const STATUSES: Status[] = ["集中", "調査中", "詰まり", "レビュー待ち"];
+const TD_STORAGE_KEY = "td";
+const REMINDER_CHECK_INTERVAL_MS = 30_000;
+const DEFAULT_REMIND_AFTER_MIN = 1;
+const DEFAULT_SNOOZE_MIN = 30;
+
+type TdState = {
+  lastSentAtMs: number;
+  remindAfterMin: number;
+  snoozeUntilMs: number | null;
+};
 
 const COLLAPSED_WIDTH = 132;
 const COLLAPSED_HEIGHT = 132;
+const REMINDER_WIDTH = 290;
+const REMINDER_HEIGHT = 132;
 const OPEN_MIN_WIDTH = 460;
 const OPEN_MIN_HEIGHT = 440;
 const OPEN_PADDING = 10;
 const ICON_SIZE = 74;
 const ICON_PANEL_GAP = 12;
 
+function loadTdState(): TdState {
+  const now = Date.now();
+  try {
+    const raw = localStorage.getItem(TD_STORAGE_KEY);
+    if (!raw) {
+      return {
+        lastSentAtMs: now,
+        remindAfterMin: DEFAULT_REMIND_AFTER_MIN,
+        snoozeUntilMs: null,
+      };
+    }
+    const parsed = JSON.parse(raw) as Partial<TdState>;
+    const remindAfterMin =
+      typeof parsed.remindAfterMin === "number" && parsed.remindAfterMin > 0
+        ? parsed.remindAfterMin
+        : DEFAULT_REMIND_AFTER_MIN;
+    return {
+      lastSentAtMs: typeof parsed.lastSentAtMs === "number" ? parsed.lastSentAtMs : now,
+      remindAfterMin,
+      snoozeUntilMs: typeof parsed.snoozeUntilMs === "number" ? parsed.snoozeUntilMs : null,
+    };
+  } catch {
+    return {
+      lastSentAtMs: now,
+      remindAfterMin: DEFAULT_REMIND_AFTER_MIN,
+      snoozeUntilMs: null,
+    };
+  }
+}
+
 function App() {
   const apiBase = useMemo(
     () => (import.meta.env.VITE_API_BASE_URL as string) || "http://127.0.0.1:3001",
     [],
   );
+  const initialTdState = useMemo(() => loadTdState(), []);
   const [isOpen, setIsOpen] = useState(false);
   const [text, setText] = useState("");
   const [status, setStatus] = useState<Status>("集中");
   const [statusOpen, setStatusOpen] = useState(false);
+  const [lastSentAtMs, setLastSentAtMs] = useState(initialTdState.lastSentAtMs);
+  const [remindAfterMin, setRemindAfterMin] = useState(initialTdState.remindAfterMin);
+  const [snoozeUntilMs, setSnoozeUntilMs] = useState<number | null>(initialTdState.snoozeUntilMs);
+  const [reminderVisible, setReminderVisible] = useState(false);
   const [user, setUser] = useState("teamK");
   const [sending, setSending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -34,7 +81,11 @@ function App() {
     try {
       const appWindow = getCurrentWindow();
       if (!isOpen) {
-        await appWindow.setSize(new LogicalSize(COLLAPSED_WIDTH, COLLAPSED_HEIGHT));
+        if (reminderVisible) {
+          await appWindow.setSize(new LogicalSize(REMINDER_WIDTH, REMINDER_HEIGHT));
+        } else {
+          await appWindow.setSize(new LogicalSize(COLLAPSED_WIDTH, COLLAPSED_HEIGHT));
+        }
         return;
       }
 
@@ -56,7 +107,35 @@ function App() {
 
   useEffect(() => {
     void resizeWindow();
-  }, [isOpen, statusOpen, message, text.length, sending]);
+  }, [isOpen, reminderVisible, statusOpen, message, text.length, sending]);
+
+  useEffect(() => {
+    localStorage.setItem(
+      TD_STORAGE_KEY,
+      JSON.stringify({
+        lastSentAtMs,
+        remindAfterMin,
+        snoozeUntilMs,
+      }),
+    );
+  }, [lastSentAtMs, remindAfterMin, snoozeUntilMs]);
+
+  useEffect(() => {
+    function checkReminder() {
+      const now = Date.now();
+      if (snoozeUntilMs && now < snoozeUntilMs) {
+        setReminderVisible(false);
+        return;
+      }
+
+      const remindAfterMs = remindAfterMin * 60 * 1000;
+      setReminderVisible(now - lastSentAtMs >= remindAfterMs);
+    }
+
+    checkReminder();
+    const intervalId = window.setInterval(checkReminder, REMINDER_CHECK_INTERVAL_MS);
+    return () => window.clearInterval(intervalId);
+  }, [lastSentAtMs, remindAfterMin, snoozeUntilMs]);
 
   useEffect(() => {
     function handleOutsideClick(event: MouseEvent) {
@@ -124,10 +203,14 @@ function App() {
       }
 
       const result = (await response.json().catch(() => ({}))) as { message?: string };
-      setText("");
       if (response.status === 207) {
         setMessage("メモは保存しましたが、Slack送信に失敗しました");
       } else {
+        const now = Date.now();
+        setText("");
+        setLastSentAtMs(now);
+        setSnoozeUntilMs(null);
+        setReminderVisible(false);
         setMessage(result.message ?? "Slackに送信しました");
       }
     } catch (error: unknown) {
@@ -139,16 +222,46 @@ function App() {
   }
 
   return (
-    <main className={`app ${isOpen ? "open" : "collapsed"}`}>
-      <button
-        className="character"
-        onPointerDown={handleCharacterPointerDown}
-        onPointerMove={handleCharacterPointerMove}
-        onPointerUp={handleCharacterPointerUp}
-        type="button"
-      >
-        <span className="character-face">🐣</span>
-      </button>
+    <main className={`app ${isOpen ? "open" : "collapsed"} ${reminderVisible && !isOpen ? "with-reminder" : ""}`}>
+      <div className="avatar-area">
+        <button
+          className="character"
+          onPointerDown={handleCharacterPointerDown}
+          onPointerMove={handleCharacterPointerMove}
+          onPointerUp={handleCharacterPointerUp}
+          type="button"
+        >
+          <span className="character-face">🐣</span>
+        </button>
+        {reminderVisible && !isOpen ? (
+          <aside className="reminder-bubble">
+            <p>そろそろ思考をメモする？</p>
+            <div className="reminder-actions">
+              <button
+                onClick={() => {
+                  setIsOpen(true);
+                  setReminderVisible(false);
+                }}
+                type="button"
+              >
+                memo
+              </button>
+              <button
+                onClick={() => {
+                  setSnoozeUntilMs(Date.now() + DEFAULT_SNOOZE_MIN * 60 * 1000);
+                  setReminderVisible(false);
+                }}
+                type="button"
+              >
+                later
+              </button>
+              <button onClick={() => setReminderVisible(false)} type="button">
+                ×
+              </button>
+            </div>
+          </aside>
+        ) : null}
+      </div>
 
       <section className={`panel ${isOpen ? "open" : "hidden"}`} ref={panelRef}>
         <header className="panel-header" data-tauri-drag-region>
@@ -196,6 +309,22 @@ function App() {
               </div>
             ) : null}
           </div>
+        </div>
+
+        <div className="field">
+          <label htmlFor="remind-min-input">リマインド間隔（分）</label>
+          <input
+            id="remind-min-input"
+            inputMode="numeric"
+            min={1}
+            onChange={(event) => {
+              const value = Number(event.currentTarget.value);
+              if (!Number.isFinite(value) || value <= 0) return;
+              setRemindAfterMin(Math.floor(value));
+            }}
+            type="number"
+            value={remindAfterMin}
+          />
         </div>
 
         <div className="field">
