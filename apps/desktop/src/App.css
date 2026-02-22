@@ -113,6 +113,19 @@ body {
   z-index: 30;
 }
 
+.timer-bubble {
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 4px;
+  width: 140px;
+  border-radius: 14px;
+  background: #ffffff;
+  border: 1px solid #d4e0ef;
+  box-shadow: 0 10px 22px rgba(16, 38, 61, 0.2);
+  padding: 10px;
+  z-index: 31;
+}
+
 .reminder-bubble::before {
   content: "";
   position: absolute;
@@ -126,7 +139,28 @@ body {
   border-bottom: 1px solid #d4e0ef;
 }
 
+.timer-bubble::before {
+  content: "";
+  position: absolute;
+  left: -8px;
+  top: 14px;
+  width: 12px;
+  height: 12px;
+  transform: rotate(45deg);
+  background: #ffffff;
+  border-left: 1px solid #d4e0ef;
+  border-bottom: 1px solid #d4e0ef;
+}
+
 .reminder-bubble p {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: #233654;
+  line-height: 1.35;
+}
+
+.timer-bubble p {
   margin: 0;
   font-size: 12px;
   font-weight: 700;
@@ -185,6 +219,19 @@ body {
   margin-bottom: 8px;
 }
 
+.title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.clock-controls {
+  display: flex;
+  align-items: center;
+  -webkit-app-region: no-drag;
+}
+
 .drag-handle {
   width: 42px;
   height: 5px;
@@ -215,6 +262,16 @@ h1 {
   margin-top: 8px;
 }
 
+.memo-field {
+  position: relative;
+}
+
+.memo-head {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 4px;
+}
+
 label,
 .field > span {
   display: block;
@@ -222,6 +279,10 @@ label,
   font-size: 12px;
   color: var(--muted);
   font-weight: 600;
+}
+
+.memo-head label {
+  margin-bottom: 0;
 }
 
 input,
@@ -310,9 +371,201 @@ textarea:focus {
 }
 
 textarea {
-  margin-top: 4px;
   min-height: 124px;
   resize: none;
+}
+
+.clock-widget {
+  position: relative;
+  flex: 1;
+}
+
+.clock-pill {
+  display: flex;
+  align-items: center;
+  min-width: 42px;
+  height: 34px;
+  border: 1px solid #d4e0f3;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #ffffff, #edf4ff);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 6px 14px rgba(25, 58, 94, 0.1);
+}
+
+.clock-pill.active {
+  width: 96px;
+  background: linear-gradient(180deg, #f8fbff, #e8f1ff);
+  border-color: #9dbce8;
+}
+
+.pause-inline {
+  border: 0;
+  width: 20px;
+  height: 100%;
+  padding: 0;
+  background: transparent;
+  color: #2b4f7d;
+  font-family: inherit;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 0;
+  cursor: pointer;
+}
+
+.pause-symbol {
+  line-height: 1;
+}
+
+.pause-symbol.play {
+  font-size: 13px;
+}
+
+.pause-symbol.stop {
+  font-size: 16px;
+}
+
+.clock-trigger {
+  border: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0 2px;
+  background: transparent;
+  color: #2b4f7d;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  cursor: pointer;
+}
+
+
+.clock-time {
+  letter-spacing: 0;
+  margin-left: 0;
+}
+
+.clock-icon {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  display: inline-block;
+}
+
+.clock-icon-ring {
+  position: absolute;
+  inset: 0;
+  border: 1.6px solid #2f5d91;
+  border-radius: 50%;
+  box-sizing: border-box;
+}
+
+.clock-icon-hand {
+  position: absolute;
+  left: 50%;
+  bottom: 50%;
+  width: 1.5px;
+  background: #2f5d91;
+  border-radius: 2px;
+  transform-origin: center bottom;
+}
+
+.clock-icon-hand.hour {
+  height: 4px;
+  transform: translateX(-50%) rotate(25deg);
+}
+
+.clock-icon-hand.minute {
+  height: 5.5px;
+  transform: translateX(-50%) rotate(-55deg);
+}
+
+.clock-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 162px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 10px 24px rgba(18, 38, 59, 0.2);
+  padding: 8px;
+  z-index: 25;
+}
+
+.clock-mode-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.clock-mode-buttons button {
+  border: 1px solid #c4d5eb;
+  border-radius: 8px;
+  background: #f7fbff;
+  color: #2b466d;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  height: 30px;
+  cursor: pointer;
+}
+
+.clock-mode-buttons button.active {
+  border-color: transparent;
+  background: linear-gradient(130deg, var(--accent), var(--accent-2));
+  color: #fff;
+}
+
+.clock-start {
+  margin-top: 8px;
+  width: 100%;
+  border: 0;
+  border-radius: 8px;
+  height: 32px;
+  background: linear-gradient(140deg, #1f6fff, #3fbcff);
+  color: #fff;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.clock-start:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.timer-inputs {
+  margin-top: 8px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.timer-inputs label {
+  margin: 0;
+  color: #36557c;
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.timer-inputs input {
+  width: 36px;
+  height: 26px;
+  border-radius: 8px;
+  border: 1px solid #c4d5eb;
+  padding: 0 4px;
+  font-size: 12px;
+  text-align: center;
 }
 
 .panel-footer {
