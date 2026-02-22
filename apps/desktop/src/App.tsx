@@ -17,7 +17,19 @@ type TdState = {
   lastSentAtMs: number;
   remindAfterMin: number;
   snoozeUntilMs: number | null;
+  memoCount: number;
 };
+
+const CHARACTER_STAGES: { threshold: number; emoji: string }[] = [
+  { threshold: 30, emoji: "🐔" },
+  { threshold: 15, emoji: "🐥" },
+  { threshold: 1, emoji: "🐣" },
+  { threshold: 0, emoji: "🥚" },
+];
+
+function getCharacterEmoji(count: number): string {
+  return CHARACTER_STAGES.find((s) => count >= s.threshold)?.emoji ?? "🥚";
+}
 
 const COLLAPSED_WIDTH = 132;
 const COLLAPSED_HEIGHT = 132;
@@ -38,6 +50,7 @@ function loadTdState(): TdState {
         lastSentAtMs: now,
         remindAfterMin: DEFAULT_REMIND_AFTER_MIN,
         snoozeUntilMs: null,
+        memoCount: 0,
       };
     }
     const parsed = JSON.parse(raw) as Partial<TdState>;
@@ -49,12 +62,14 @@ function loadTdState(): TdState {
       lastSentAtMs: typeof parsed.lastSentAtMs === "number" ? parsed.lastSentAtMs : now,
       remindAfterMin,
       snoozeUntilMs: typeof parsed.snoozeUntilMs === "number" ? parsed.snoozeUntilMs : null,
+      memoCount: typeof parsed.memoCount === "number" && parsed.memoCount >= 0 ? parsed.memoCount : 0,
     };
   } catch {
     return {
       lastSentAtMs: now,
       remindAfterMin: DEFAULT_REMIND_AFTER_MIN,
       snoozeUntilMs: null,
+      memoCount: 0,
     };
   }
 }
@@ -93,6 +108,7 @@ function App() {
   const [lastSentAtMs, setLastSentAtMs] = useState(initialTdState.lastSentAtMs);
   const [remindAfterMin, setRemindAfterMin] = useState(initialTdState.remindAfterMin);
   const [snoozeUntilMs, setSnoozeUntilMs] = useState<number | null>(initialTdState.snoozeUntilMs);
+  const [memoCount, setMemoCount] = useState(initialTdState.memoCount);
   const [reminderVisible, setReminderVisible] = useState(false);
   const [user, setUser] = useState("teamK");
   const [sending, setSending] = useState(false);
@@ -153,9 +169,10 @@ function App() {
         lastSentAtMs,
         remindAfterMin,
         snoozeUntilMs,
+        memoCount,
       }),
     );
-  }, [lastSentAtMs, remindAfterMin, snoozeUntilMs]);
+  }, [lastSentAtMs, remindAfterMin, snoozeUntilMs, memoCount]);
 
   useEffect(() => {
     function checkReminder() {
@@ -327,6 +344,7 @@ function App() {
         setLastSentAtMs(now);
         setSnoozeUntilMs(null);
         setReminderVisible(false);
+        setMemoCount((c) => c + 1);
         setMessage(result.message ?? "Slackに送信しました");
       }
     } catch (error: unknown) {
@@ -347,7 +365,7 @@ function App() {
           onPointerUp={handleCharacterPointerUp}
           type="button"
         >
-          <span className="character-face">🐣</span>
+          <span className="character-face">{getCharacterEmoji(memoCount)}</span>
         </button>
         {timerNoticeVisible ? (
           <aside className="timer-bubble">
