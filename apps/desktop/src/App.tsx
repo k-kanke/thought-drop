@@ -235,6 +235,17 @@ function App() {
     setClockOpen(false);
   }
 
+  function resetTimeTracking() {
+    setTimeRunning(false);
+    setActiveTimeMode(null);
+    setTimeStartedAtMs(null);
+    setElapsedBeforePauseMs(0);
+    setActiveTimerDurationMs(0);
+    setTimeDisplayMs(0);
+    setClockOpen(false);
+    setTimerNoticeVisible(false);
+  }
+
   function togglePauseResume() {
     if (!activeTimeMode) return;
 
@@ -458,6 +469,11 @@ function App() {
                       <button className="clock-start" disabled={startTimerDisabled} onClick={startTime} type="button">
                         Start {selectedTimeMode}
                       </button>
+                      {activeTimeMode ? (
+                        <button className="clock-reset" onClick={resetTimeTracking} type="button">
+                          Reset
+                        </button>
+                      ) : null}
                     </div>
                   ) : null}
                 </div>
