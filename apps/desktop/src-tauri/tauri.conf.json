@@ -10,11 +10,12 @@
     "frontendDist": "../dist"
   },
   "app": {
+    "macOSPrivateApi": true,
     "windows": [
       {
         "title": "desktop",
-        "width": 96,
-        "height": 96,
+        "width": 116,
+        "height": 116,
         "decorations": false,
         "transparent": true,
         "resizable": false,

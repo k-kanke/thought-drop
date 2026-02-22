@@ -6,6 +6,8 @@ pub fn run() {
         .setup(|app| {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_always_on_top(true);
+                #[cfg(target_os = "macos")]
+                let _ = window.set_visible_on_all_workspaces(true);
             }
             Ok(())
         })
