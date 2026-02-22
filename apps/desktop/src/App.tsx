@@ -5,10 +5,13 @@ import "./App.css";
 type Status = "集中" | "調査中" | "詰まり" | "レビュー待ち";
 const STATUSES: Status[] = ["集中", "調査中", "詰まり", "レビュー待ち"];
 
-const COLLAPSED_WIDTH = 116;
-const COLLAPSED_HEIGHT = 116;
-const EXPANDED_WIDTH = 460;
-const EXPANDED_HEIGHT = 440;
+const COLLAPSED_WIDTH = 132;
+const COLLAPSED_HEIGHT = 132;
+const OPEN_MIN_WIDTH = 460;
+const OPEN_MIN_HEIGHT = 440;
+const OPEN_PADDING = 10;
+const ICON_SIZE = 74;
+const ICON_PANEL_GAP = 12;
 
 function App() {
   const apiBase = useMemo(
@@ -25,24 +28,35 @@ function App() {
   const pointerDown = useRef<{ x: number; y: number } | null>(null);
   const dragged = useRef(false);
   const statusRef = useRef<HTMLDivElement | null>(null);
+  const panelRef = useRef<HTMLElement | null>(null);
 
-  async function resizeWindow(open: boolean) {
+  async function resizeWindow() {
     try {
       const appWindow = getCurrentWindow();
-      await appWindow.setSize(
-        new LogicalSize(
-          open ? EXPANDED_WIDTH : COLLAPSED_WIDTH,
-          open ? EXPANDED_HEIGHT : COLLAPSED_HEIGHT,
-        ),
+      if (!isOpen) {
+        await appWindow.setSize(new LogicalSize(COLLAPSED_WIDTH, COLLAPSED_HEIGHT));
+        return;
+      }
+
+      const panelRect = panelRef.current?.getBoundingClientRect();
+      const panelWidth = panelRect ? Math.ceil(panelRect.width) : 344;
+      const panelHeight = panelRef.current ? Math.ceil(panelRef.current.scrollHeight) : 400;
+
+      const width = Math.max(
+        OPEN_MIN_WIDTH,
+        panelWidth + ICON_SIZE + ICON_PANEL_GAP + OPEN_PADDING * 2,
       );
+      const height = Math.max(OPEN_MIN_HEIGHT, Math.max(panelHeight, ICON_SIZE) + OPEN_PADDING * 2);
+
+      await appWindow.setSize(new LogicalSize(width, height));
     } catch (error) {
       console.warn("window resize skipped", error);
     }
   }
 
   useEffect(() => {
-    void resizeWindow(isOpen);
-  }, [isOpen]);
+    void resizeWindow();
+  }, [isOpen, statusOpen, message, text.length, sending]);
 
   useEffect(() => {
     function handleOutsideClick(event: MouseEvent) {
@@ -135,7 +149,7 @@ function App() {
         <span className="character-face">🐣</span>
       </button>
 
-      <section className={`panel ${isOpen ? "open" : "hidden"}`}>
+      <section className={`panel ${isOpen ? "open" : "hidden"}`} ref={panelRef}>
         <header className="panel-header" data-tauri-drag-region>
           <div className="drag-handle" title="drag" />
           <p className="eyebrow">Thought Drop</p>

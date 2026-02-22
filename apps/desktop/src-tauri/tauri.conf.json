@@ -14,8 +14,8 @@
     "windows": [
       {
         "title": "desktop",
-        "width": 116,
-        "height": 116,
+        "width": 132,
+        "height": 132,
         "decorations": false,
         "transparent": true,
         "resizable": false,
