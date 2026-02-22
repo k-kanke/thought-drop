@@ -5,6 +5,7 @@
 ## 構成
 
 - `apps/desktop`: Tauri + React フロントエンド
+- `apps/web`: React + Vite Webフロントエンド
 - `services`: Node.js + Express + TypeScript API（Slack webhook中継）
 
 ## ローカルでの起動方法
@@ -39,6 +40,21 @@ pnpm tauri dev
 ```
 
 `apps/desktop/.env` は通常そのままでOKです（`VITE_API_BASE_URL=http://127.0.0.1:3001`）。
+
+### 4. Webフロントエンドのセットアップと起動（任意・別ターミナル）
+
+```bash
+cd apps/web
+pnpm install
+pnpm dev
+```
+
+ルートから実行する場合:
+
+```bash
+pnpm -C apps/web install
+pnpm -C apps/web dev
+```
 
 ## 動作確認チェック
 
