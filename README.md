@@ -5,40 +5,44 @@
 ## 構成
 
 - `apps/desktop`: Tauri + React フロントエンド
-- `services/api`: Fastify + TypeScript API（Slack webhook中継）
+- `services`: Node.js + Express + TypeScript API（Slack webhook中継）
 
-## ステップバイステップ実行
+## ローカルでの起動方法
 
-### 1. 前提ツールを用意
+### 1. 前提ツール
 
 - Node.js 20 以上
 - pnpm
-- Rust（Tauri起動時）
+- Rust（Tauri起動時のみ）
 
-### 2. 環境変数ファイルを作成
+### 2. バックエンドのセットアップと起動
 
 ```bash
-cp services/api/.env.example services/api/.env
-cp apps/desktop/.env.example apps/desktop/.env
+cd services
+npm install
+cp .env.example .env
 ```
 
-`services/api/.env` の `SLACK_WEBHOOK_URL` を実URLに変更してください。
-
-### 3. 依存関係をインストール
+`services/.env` の `SLACK_WEBHOOK_URL` を実URLに設定してから起動:
 
 ```bash
+npm run dev
+```
+
+### 3. デスクトップアプリのセットアップと起動（別ターミナル）
+
+```bash
+cd apps/desktop
 pnpm install
+cp .env.example .env
+pnpm tauri dev
 ```
 
-### 4. 開発起動（API + Desktopを同時）
-
-```bash
-pnpm dev
-```
+`apps/desktop/.env` は通常そのままでOKです（`VITE_API_BASE_URL=http://127.0.0.1:3001`）。
 
 ## 動作確認チェック
 
 - Desktopウィンドウが最前面で表示される
 - キャラクターボタン（🐣）クリックで入力UIが開閉する
-- 送信でSlackに投稿される
+- 送信でSlackに投稿される（API経由）
 - 失敗時にUIにエラーメッセージが出る
