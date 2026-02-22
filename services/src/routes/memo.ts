@@ -7,7 +7,7 @@ const router = Router();
 
 // POST /api/memo - メモ保存 + Slack送信
 router.post('/', async (req: Request, res: Response) => {
-  const { content, status, timestamp }: MemoRequest = req.body;
+  const { content, status, user, timestamp }: MemoRequest = req.body;
 
   if (!content || typeof content !== 'string' || content.trim() === '') {
     res.status(400).json({ error: 'content is required and must be a non-empty string' });
@@ -27,7 +27,7 @@ router.post('/', async (req: Request, res: Response) => {
 
   // Slack送信
   try {
-    await sendToSlack({ content: trimmedContent, status, timestamp: createdAt });
+    await sendToSlack({ content: trimmedContent, status, user, timestamp: createdAt });
     db.prepare('UPDATE memos SET sent_to_slack = 1 WHERE id = ?').run(memoId);
     res.status(200).json({ message: 'Memo sent to Slack successfully', id: memoId });
   } catch (error) {

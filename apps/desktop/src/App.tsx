@@ -113,6 +113,7 @@ function App() {
         body: JSON.stringify({
           content: text.trim(),
           status,
+          user: user.trim(),
           timestamp: new Date().toISOString(),
         }),
       });

@@ -19,7 +19,7 @@ function sleep(ms: number): Promise<void> {
 function formatMessage(memo: MemoRequest, timestamp: string): string {
   const status = memo.status ?? 'info';
   const emoji = STATUS_EMOJI[status] ?? '📝';
-  const userName = process.env.USER_NAME ?? os.hostname();
+  const userName = memo.user?.trim() || process.env.USER_NAME || os.hostname();
 
   // JST表示（UTC+9）
   const jst = new Date(new Date(timestamp).getTime() + 9 * 60 * 60 * 1000);
