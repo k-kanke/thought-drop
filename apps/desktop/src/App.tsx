@@ -2,8 +2,8 @@ import { type PointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import { LogicalSize, getCurrentWindow } from "@tauri-apps/api/window";
 import "./App.css";
 
-type Status = "FOCUS" | "RESEARCHING" | "STUCK" | "REVIEW" | "MEMO";
-const STATUSES: Status[] = ["FOCUS", "RESEARCHING", "STUCK", "REVIEW", "MEMO"];
+type Status = "集中" | "調査中" | "詰まり" | "レビュー待ち";
+const STATUSES: Status[] = ["集中", "調査中", "詰まり", "レビュー待ち"];
 
 const COLLAPSED_WIDTH = 116;
 const COLLAPSED_HEIGHT = 116;
@@ -17,7 +17,7 @@ function App() {
   );
   const [isOpen, setIsOpen] = useState(false);
   const [text, setText] = useState("");
-  const [status, setStatus] = useState<Status>("FOCUS");
+  const [status, setStatus] = useState<Status>("集中");
   const [statusOpen, setStatusOpen] = useState(false);
   const [user, setUser] = useState("teamK");
   const [sending, setSending] = useState(false);
@@ -93,10 +93,14 @@ function App() {
 
     setSending(true);
     try {
-      const response = await fetch(`${apiBase}/memos`, {
+      const response = await fetch(`${apiBase}/api/memo`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ text, status, user }),
+        body: JSON.stringify({
+          content: text.trim(),
+          status,
+          timestamp: new Date().toISOString(),
+        }),
       });
 
       if (!response.ok) {
@@ -104,8 +108,13 @@ function App() {
         throw new Error(`API failed: ${response.status} ${body}`);
       }
 
+      const result = (await response.json().catch(() => ({}))) as { message?: string };
       setText("");
-      setMessage("Slackに送信しました");
+      if (response.status === 207) {
+        setMessage("メモは保存しましたが、Slack送信に失敗しました");
+      } else {
+        setMessage(result.message ?? "Slackに送信しました");
+      }
     } catch (error: unknown) {
       const detail = error instanceof Error ? error.message : String(error);
       setMessage(`送信失敗: ${detail}`);
