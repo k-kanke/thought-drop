@@ -1,0 +1,45 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Env files
+.env
+.env.*
+!.env.example
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Node / frontend
+node_modules/
+.pnpm-store/
+dist/
+build/
+coverage/
+.cache/
+.eslintcache
+*.tsbuildinfo
+
+# Rust / Cargo
+**/target/
+
+# Tauri bundle output
+src-tauri/gen/
+
+# Test artifacts
+playwright-report/
+test-results/
+
+# Temporary
+tmp/
+temp/
