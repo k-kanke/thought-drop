@@ -1,49 +1,118 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
+import { useEffect, useMemo, useState } from "react";
+import { LogicalSize, getCurrentWindow } from "@tauri-apps/api/window";
 import "./App.css";
 
-function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+type Status = "FOCUS" | "RESEARCHING" | "STUCK" | "REVIEW" | "MEMO";
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
+const COLLAPSED_WIDTH = 96;
+const COLLAPSED_HEIGHT = 96;
+const EXPANDED_WIDTH = 400;
+const EXPANDED_HEIGHT = 340;
+
+function App() {
+  const apiBase = useMemo(
+    () => (import.meta.env.VITE_API_BASE_URL as string) || "http://127.0.0.1:3001",
+    [],
+  );
+  const [isOpen, setIsOpen] = useState(false);
+  const [text, setText] = useState("");
+  const [status, setStatus] = useState<Status>("FOCUS");
+  const [user, setUser] = useState("teamK");
+  const [sending, setSending] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  async function resizeWindow(open: boolean) {
+    try {
+      const appWindow = getCurrentWindow();
+      await appWindow.setSize(
+        new LogicalSize(
+          open ? EXPANDED_WIDTH : COLLAPSED_WIDTH,
+          open ? EXPANDED_HEIGHT : COLLAPSED_HEIGHT,
+        ),
+      );
+    } catch (error) {
+      console.warn("window resize skipped", error);
+    }
+  }
+
+  useEffect(() => {
+    void resizeWindow(isOpen);
+  }, [isOpen]);
+
+  async function sendMemo() {
+    setMessage(null);
+    if (!text.trim()) {
+      setMessage("本文が空です");
+      return;
+    }
+
+    setSending(true);
+    try {
+      const response = await fetch(`${apiBase}/memos`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ text, status, user }),
+      });
+
+      if (!response.ok) {
+        const body = await response.text().catch(() => "");
+        throw new Error(`API failed: ${response.status} ${body}`);
+      }
+
+      setText("");
+      setMessage("Slackに送信しました");
+    } catch (error: unknown) {
+      const detail = error instanceof Error ? error.message : String(error);
+      setMessage(`送信失敗: ${detail}`);
+    } finally {
+      setSending(false);
+    }
   }
 
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
-
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
+    <main className={`app ${isOpen ? "open" : "collapsed"}`}>
+      <button
+        className="character"
+        data-tauri-drag-region
+        onClick={() => setIsOpen((current) => !current)}
+        type="button"
       >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
+        🐣
+      </button>
+
+      <section className={`panel ${isOpen ? "open" : "hidden"}`}>
+        <div className="drag-handle" data-tauri-drag-region title="drag" />
+        <div className="row">
+          <input
+            value={user}
+            onChange={(event) => setUser(event.currentTarget.value)}
+            placeholder="user"
+          />
+          <select
+            value={status}
+            onChange={(event) => setStatus(event.currentTarget.value as Status)}
+          >
+            <option value="FOCUS">FOCUS</option>
+            <option value="RESEARCHING">RESEARCHING</option>
+            <option value="STUCK">STUCK</option>
+            <option value="REVIEW">REVIEW</option>
+            <option value="MEMO">MEMO</option>
+          </select>
+        </div>
+
+        <textarea
+          rows={5}
+          value={text}
+          onChange={(event) => setText(event.currentTarget.value)}
+          placeholder="いまの思考/詰まりをそのまま書く"
         />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
+
+        <button className="send" onClick={sendMemo} disabled={sending} type="button">
+          {sending ? "Sending..." : "Send to Slack"}
+        </button>
+
+        {message ? <p className="message">{message}</p> : null}
+      </section>
     </main>
   );
 }

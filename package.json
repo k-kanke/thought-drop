@@ -1,0 +1,10 @@
+{
+  "name": "thought-drop",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -n API,DESKTOP -c auto \"pnpm -C services/api dev\" \"pnpm -C apps/desktop tauri dev\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
