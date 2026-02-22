@@ -49,9 +49,18 @@ body {
   padding: 8px;
 }
 
+.app.collapsed.with-reminder {
+  justify-content: flex-start;
+  padding: 10px;
+}
+
 .app.open {
   align-items: flex-start;
   padding: 10px;
+}
+
+.avatar-area {
+  position: relative;
 }
 
 .character {
@@ -89,6 +98,68 @@ body {
 .character-face {
   font-size: 34px;
   line-height: 1;
+}
+
+.reminder-bubble {
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 4px;
+  width: 152px;
+  border-radius: 14px;
+  background: #ffffff;
+  border: 1px solid #d4e0ef;
+  box-shadow: 0 10px 22px rgba(16, 38, 61, 0.2);
+  padding: 10px;
+  z-index: 30;
+}
+
+.reminder-bubble::before {
+  content: "";
+  position: absolute;
+  left: -8px;
+  top: 14px;
+  width: 12px;
+  height: 12px;
+  transform: rotate(45deg);
+  background: #ffffff;
+  border-left: 1px solid #d4e0ef;
+  border-bottom: 1px solid #d4e0ef;
+}
+
+.reminder-bubble p {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: #233654;
+  line-height: 1.35;
+}
+
+.reminder-actions {
+  margin-top: 8px;
+  display: flex;
+  gap: 6px;
+}
+
+.reminder-actions button {
+  border: 1px solid #c4d5eb;
+  border-radius: 8px;
+  background: #f5f9ff;
+  color: #23416a;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 7px;
+  cursor: pointer;
+}
+
+.reminder-actions button:first-child {
+  background: linear-gradient(140deg, #1f6fff, #3fbcff);
+  border-color: transparent;
+  color: #ffffff;
+}
+
+.reminder-actions button:hover {
+  transform: translateY(-1px);
 }
 
 .panel {
