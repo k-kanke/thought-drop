@@ -3,13 +3,23 @@ import db from '../db/client';
 
 const router = Router();
 
-// GET /api/stats/daily - 日別集計（草グラフ用）
-// ?days=N で過去N日分を返す（デフォルト90日）
-router.get('/daily', (_req: Request, res: Response) => {
-  const rawDays = Number(_req.query.days);
-  const days = Number.isFinite(rawDays)
-    ? Math.min(Math.max(Math.floor(rawDays), 1), 365)
-    : 90;
+function parseDays(raw: unknown, defaultValue: number, maxValue: number): number {
+  const value = Number(raw);
+  if (!Number.isFinite(value)) return defaultValue;
+  return Math.min(Math.max(Math.floor(value), 1), maxValue);
+}
+
+function buildDateRange(fromRaw: unknown, toRaw: unknown): { from: string; to: string } {
+  const nowJst = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const from = typeof fromRaw === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(fromRaw) ? fromRaw : '';
+  const to = typeof toRaw === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(toRaw) ? toRaw : nowJst;
+  const safeFrom = from || new Date((new Date(to).getTime()) - 119 * 24 * 60 * 60 * 1000)
+    .toISOString().slice(0, 10);
+  return safeFrom <= to ? { from: safeFrom, to } : { from: to, to: safeFrom };
+}
+
+router.get('/daily', (req: Request, res: Response) => {
+  const days = parseDays(req.query.days, 90, 365);
   const offsetDays = -(days - 1);
 
   const rows = db.prepare(`
@@ -27,7 +37,6 @@ router.get('/daily', (_req: Request, res: Response) => {
   res.status(200).json({ daily: rows });
 });
 
-// GET /api/stats/summary - 週次サマリー（Insight Card用）
 router.get('/summary', (_req: Request, res: Response) => {
   const thisWeek = db.prepare(`
     SELECT
@@ -36,7 +45,7 @@ router.get('/summary', (_req: Request, res: Response) => {
       SUM(resolved) AS resolved
     FROM memos
     WHERE date(datetime(created_at, '+9 hours')) >= date('now', '+9 hours', '-6 days')
-  `).get() as { total: number; stuck: number; resolved: number };
+  `).get() as { total: number | null; stuck: number | null; resolved: number | null };
 
   const topStuckRow = db.prepare(`
     SELECT content, created_at
@@ -49,11 +58,55 @@ router.get('/summary', (_req: Request, res: Response) => {
 
   res.status(200).json({
     week: {
-      total: thisWeek.total,
-      stuck: thisWeek.stuck,
-      resolved: thisWeek.resolved,
+      total: thisWeek.total ?? 0,
+      stuck: thisWeek.stuck ?? 0,
+      resolved: thisWeek.resolved ?? 0,
       top_stuck: topStuckRow ?? null,
     },
+  });
+});
+
+router.get('/contributions', (req: Request, res: Response) => {
+  const { from, to } = buildDateRange(req.query.from, req.query.to);
+  const rows = db.prepare(`
+    SELECT
+      date_jst AS date,
+      memo_count AS total,
+      stuck_count AS stuck,
+      resolved_count AS resolved
+    FROM daily_stats
+    WHERE date_jst BETWEEN ? AND ?
+    ORDER BY date_jst ASC
+  `).all(from, to) as Array<{ date: string; total: number; stuck: number; resolved: number }>;
+
+  const byDate = new Map(rows.map((row) => [row.date, row]));
+  const result: Array<{
+    date: string;
+    total: number;
+    stuck: number;
+    resolved: number;
+    intensity: 0 | 1 | 2 | 3 | 4;
+    condition: 'normal' | 'stuck';
+  }> = [];
+
+  const current = new Date(`${from}T00:00:00.000Z`);
+  const end = new Date(`${to}T00:00:00.000Z`);
+  while (current <= end) {
+    const date = current.toISOString().slice(0, 10);
+    const row = byDate.get(date) ?? { date, total: 0, stuck: 0, resolved: 0 };
+    const intensity = row.total >= 8 ? 4 : row.total >= 5 ? 3 : row.total >= 3 ? 2 : row.total >= 1 ? 1 : 0;
+    result.push({
+      ...row,
+      intensity,
+      condition: row.stuck > 0 ? 'stuck' : 'normal',
+    });
+    current.setUTCDate(current.getUTCDate() + 1);
+  }
+
+  res.status(200).json({
+    from,
+    to,
+    contributions: result,
   });
 });
 

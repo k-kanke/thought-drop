@@ -1,15 +1,6 @@
 import { type FormEvent, useEffect, useMemo, useState } from 'react'
 import './App.css'
 
-type Memo = {
-  id: number
-  content: string
-  status: string | null
-  sent_to_slack: number
-  resolved: number
-  created_at: string
-}
-
 type Summary = {
   week: {
     total: number
@@ -19,21 +10,54 @@ type Summary = {
   }
 }
 
-type DailyPoint = {
+type Contribution = {
+  date: string
+  total: number
+  stuck: number
+  resolved: number
+  intensity: 0 | 1 | 2 | 3 | 4
+  condition: 'normal' | 'stuck'
+}
+
+type TimelineMemo = {
+  id: number
+  content: string
+  status: string | null
+  sent_to_slack: number
+  resolved: number
+  created_at: string
+  mode: string
+  stuck_minutes: number
+  tags: string[]
+  screenshot_url?: string | null
+}
+
+type TimelineDay = {
   date: string
   total: number
   stuck: number
   resolved: number
 }
 
-type Filters = {
-  status: string
-  resolved: 'all' | 'true' | 'false'
-  from: string
-  to: string
+type CharacterState = {
+  level: number
+  points: number
+  hunger_level: number
+  mood: string
+  evolution_path: string
+  items: Array<{ code: string; display_name: string; unlocked: boolean }>
 }
 
-const PAGE_SIZE = 20
+type Tag = {
+  id: number
+  name: string
+  usage_count: number
+}
+
+type TimelineView = 'list' | 'calendar'
+type ResolvedFilter = 'all' | 'true' | 'false'
+type ModeFilter = 'all' | 'instant' | 'stockpile'
+
 const STATUS_OPTIONS = ['集中', '調査中', '詰まり', 'レビュー待ち']
 
 function formatDateTime(value: string): string {
@@ -42,63 +66,88 @@ function formatDateTime(value: string): string {
   return date.toLocaleString('ja-JP', { hour12: false })
 }
 
+function defaultRange(): { from: string; to: string } {
+  const to = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  const from = new Date((new Date(to).getTime()) - 27 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  return { from, to }
+}
+
 function App() {
   const apiBase = useMemo(
     () => (import.meta.env.VITE_API_BASE_URL as string) || 'http://127.0.0.1:3001',
     [],
   )
+  const range = useMemo(() => defaultRange(), [])
 
-  const [draftFilters, setDraftFilters] = useState<Filters>({
-    status: '',
-    resolved: 'all',
-    from: '',
-    to: '',
-  })
-  const [filters, setFilters] = useState<Filters>({
-    status: '',
-    resolved: 'all',
-    from: '',
-    to: '',
-  })
-  const [offset, setOffset] = useState(0)
+  const [timelineView, setTimelineView] = useState<TimelineView>('list')
+  const [statusFilter, setStatusFilter] = useState('')
+  const [tagFilter, setTagFilter] = useState('')
+  const [resolvedFilter, setResolvedFilter] = useState<ResolvedFilter>('all')
+  const [fromDate, setFromDate] = useState(range.from)
+  const [toDate, setToDate] = useState(range.to)
 
-  const [memos, setMemos] = useState<Memo[]>([])
   const [summary, setSummary] = useState<Summary['week'] | null>(null)
-  const [daily, setDaily] = useState<DailyPoint[]>([])
+  const [contributions, setContributions] = useState<Contribution[]>([])
+  const [timelineMemos, setTimelineMemos] = useState<TimelineMemo[]>([])
+  const [timelineDays, setTimelineDays] = useState<TimelineDay[]>([])
+  const [tags, setTags] = useState<Tag[]>([])
+  const [character, setCharacter] = useState<CharacterState | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [updatingMemoId, setUpdatingMemoId] = useState<number | null>(null)
+
+  const [blogMode, setBlogMode] = useState<ModeFilter>('all')
+  const [blogTitle, setBlogTitle] = useState('週次技術ログ')
+  const [blogDraft, setBlogDraft] = useState('')
+  const [blogLoading, setBlogLoading] = useState(false)
 
   async function fetchDashboard(): Promise<void> {
     setLoading(true)
     setError(null)
     try {
-      const memoParams = new URLSearchParams({
-        limit: String(PAGE_SIZE),
-        offset: String(offset),
+      const timelineParams = new URLSearchParams({
+        view: timelineView,
+        limit: '120',
+        from: fromDate,
+        to: toDate,
       })
-      if (filters.status) memoParams.set('status', filters.status)
-      if (filters.resolved !== 'all') memoParams.set('resolved', filters.resolved)
-      if (filters.from) memoParams.set('from', filters.from)
-      if (filters.to) memoParams.set('to', filters.to)
+      if (statusFilter) timelineParams.set('status', statusFilter)
+      if (tagFilter) timelineParams.set('tag', tagFilter)
+      if (resolvedFilter !== 'all') timelineParams.set('resolved', resolvedFilter)
 
-      const [memoRes, summaryRes, dailyRes] = await Promise.all([
-        fetch(`${apiBase}/api/memo?${memoParams.toString()}`),
+      const contributionParams = new URLSearchParams({ from: fromDate, to: toDate })
+      const [summaryRes, contributionRes, timelineRes, tagsRes, characterRes] = await Promise.all([
         fetch(`${apiBase}/api/stats/summary`),
-        fetch(`${apiBase}/api/stats/daily?days=30`),
+        fetch(`${apiBase}/api/stats/contributions?${contributionParams.toString()}`),
+        fetch(`${apiBase}/api/memo/timeline?${timelineParams.toString()}`),
+        fetch(`${apiBase}/api/tags`),
+        fetch(`${apiBase}/api/character`),
       ])
 
-      if (!memoRes.ok) throw new Error(`memo API failed: ${memoRes.status}`)
       if (!summaryRes.ok) throw new Error(`summary API failed: ${summaryRes.status}`)
-      if (!dailyRes.ok) throw new Error(`daily API failed: ${dailyRes.status}`)
+      if (!contributionRes.ok) throw new Error(`contributions API failed: ${contributionRes.status}`)
+      if (!timelineRes.ok) throw new Error(`timeline API failed: ${timelineRes.status}`)
+      if (!tagsRes.ok) throw new Error(`tags API failed: ${tagsRes.status}`)
+      if (!characterRes.ok) throw new Error(`character API failed: ${characterRes.status}`)
 
-      const memoData = (await memoRes.json()) as { memos: Memo[] }
       const summaryData = (await summaryRes.json()) as Summary
-      const dailyData = (await dailyRes.json()) as { daily: DailyPoint[] }
+      const contributionData = (await contributionRes.json()) as { contributions: Contribution[] }
+      const timelineData = (await timelineRes.json()) as
+        | { view: 'list'; memos: TimelineMemo[] }
+        | { view: 'calendar'; days: TimelineDay[] }
+      const tagsData = (await tagsRes.json()) as { tags: Tag[] }
+      const characterData = (await characterRes.json()) as CharacterState
 
-      setMemos(memoData.memos)
       setSummary(summaryData.week)
-      setDaily(dailyData.daily)
+      setContributions(contributionData.contributions)
+      setTags(tagsData.tags)
+      setCharacter(characterData)
+      if (timelineData.view === 'list') {
+        setTimelineMemos(timelineData.memos)
+        setTimelineDays([])
+      } else {
+        setTimelineDays(timelineData.days)
+        setTimelineMemos([])
+      }
     } catch (unknownError) {
       const detail = unknownError instanceof Error ? unknownError.message : String(unknownError)
       setError(detail)
@@ -109,10 +158,9 @@ function App() {
 
   useEffect(() => {
     void fetchDashboard()
-  }, [filters, offset])
+  }, [timelineView, statusFilter, tagFilter, resolvedFilter, fromDate, toDate])
 
-  async function toggleResolved(memo: Memo): Promise<void> {
-    setUpdatingMemoId(memo.id)
+  async function toggleResolved(memo: TimelineMemo): Promise<void> {
     setError(null)
     try {
       const response = await fetch(`${apiBase}/api/memo/${memo.id}/resolve`, {
@@ -121,195 +169,230 @@ function App() {
         body: JSON.stringify({ resolved: memo.resolved !== 1 }),
       })
       if (!response.ok) throw new Error(`resolve update failed: ${response.status}`)
-
-      setMemos((current) =>
-        current.map((item) =>
-          item.id === memo.id ? { ...item, resolved: memo.resolved === 1 ? 0 : 1 } : item,
-        ),
-      )
       void fetchDashboard()
     } catch (unknownError) {
       const detail = unknownError instanceof Error ? unknownError.message : String(unknownError)
       setError(detail)
-    } finally {
-      setUpdatingMemoId(null)
     }
   }
 
-  function handleApplyFilters(event: FormEvent): void {
+  async function evolve(path: string): Promise<void> {
+    setError(null)
+    try {
+      const response = await fetch(`${apiBase}/api/character/evolve`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ path }),
+      })
+      if (!response.ok) throw new Error(`evolve failed: ${response.status}`)
+      const data = (await response.json()) as CharacterState
+      setCharacter(data)
+    } catch (unknownError) {
+      const detail = unknownError instanceof Error ? unknownError.message : String(unknownError)
+      setError(detail)
+    }
+  }
+
+  async function generateDraft(event: FormEvent): Promise<void> {
     event.preventDefault()
-    setOffset(0)
-    setFilters(draftFilters)
+    setBlogLoading(true)
+    setError(null)
+    try {
+      const response = await fetch(`${apiBase}/api/ai/blog-draft`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          from: fromDate,
+          to: toDate,
+          tag: tagFilter || undefined,
+          mode: blogMode === 'all' ? undefined : blogMode,
+          title: blogTitle,
+        }),
+      })
+      if (!response.ok) throw new Error(`blog draft failed: ${response.status}`)
+      const data = (await response.json()) as { draft: string }
+      setBlogDraft(data.draft)
+    } catch (unknownError) {
+      const detail = unknownError instanceof Error ? unknownError.message : String(unknownError)
+      setError(detail)
+    } finally {
+      setBlogLoading(false)
+    }
   }
 
-  function clearFilters(): void {
-    const empty = { status: '', resolved: 'all' as const, from: '', to: '' }
-    setDraftFilters(empty)
-    setOffset(0)
-    setFilters(empty)
-  }
-
-  const hasPrev = offset > 0
-  const hasNext = memos.length === PAGE_SIZE
-  const dailyMax = daily.reduce((max, point) => Math.max(max, point.total), 1)
+  const insightTopStuck = summary?.top_stuck?.content ?? '該当なし'
 
   return (
-    <div className="dashboard">
-      <header className="top">
+    <div className="page">
+      <header className="header">
         <div>
           <p className="eyebrow">Thought Drop</p>
-          <h1>チーム進捗ダッシュボード</h1>
+          <h1>振り返りダッシュボード</h1>
         </div>
         <button type="button" onClick={() => void fetchDashboard()} disabled={loading}>
-          {loading ? '更新中...' : '更新'}
+          {loading ? '更新中...' : '再読み込み'}
         </button>
       </header>
 
-      {summary ? (
-        <section className="cards">
-          <article className="card">
-            <p className="label">今週の投稿</p>
-            <p className="value">{summary.total}</p>
+      <section className="layout">
+        <aside className="sidebar">
+          <article className="panel">
+            <h2>Character</h2>
+            {character ? (
+              <div className="character">
+                <p>Lv.{character.level} / {character.evolution_path}</p>
+                <p>Point: {character.points}</p>
+                <p>Hunger: {character.hunger_level}</p>
+                <p>Mood: {character.mood}</p>
+                <div className="row">
+                  <button type="button" className="ghost" onClick={() => void evolve('backend')}>Backend</button>
+                  <button type="button" className="ghost" onClick={() => void evolve('infrastructure')}>Infra</button>
+                </div>
+                <ul className="items">
+                  {character.items.map((item) => (
+                    <li key={item.code} className={item.unlocked ? 'ok' : 'locked'}>
+                      {item.display_name}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : <p>読み込み中...</p>}
           </article>
-          <article className="card">
-            <p className="label">今週の詰まり</p>
-            <p className="value danger">{summary.stuck}</p>
-          </article>
-          <article className="card">
-            <p className="label">今週の解決</p>
-            <p className="value ok">{summary.resolved}</p>
-          </article>
-          <article className="card">
-            <p className="label">直近の詰まり</p>
-            <p className="snippet">
-              {summary.top_stuck
-                ? `${summary.top_stuck.content.slice(0, 60)}${summary.top_stuck.content.length > 60 ? '...' : ''}`
-                : 'なし'}
-            </p>
-          </article>
-        </section>
-      ) : null}
 
-      <section className="daily">
-        <h2>30日アクティビティ</h2>
-        <div className="bars">
-          {daily.map((point) => (
-            <div key={point.date} className="bar-wrap" title={`${point.date}: ${point.total}`}>
-              <div
-                className="bar"
-                style={{ height: `${Math.max(8, (point.total / dailyMax) * 100)}%` }}
-              />
+          <article className="panel">
+            <h2>Tags</h2>
+            <div className="tag-list">
+              {tags.slice(0, 20).map((tag) => (
+                <button
+                  key={tag.id}
+                  type="button"
+                  className={`tag ${tagFilter === tag.name ? 'active' : ''}`}
+                  onClick={() => setTagFilter(tagFilter === tag.name ? '' : tag.name)}
+                >
+                  #{tag.name} ({tag.usage_count})
+                </button>
+              ))}
             </div>
-          ))}
-        </div>
-      </section>
+          </article>
 
-      <section className="memo-panel">
-        <form className="filters" onSubmit={handleApplyFilters}>
-          <select
-            value={draftFilters.status}
-            onChange={(event) =>
-              setDraftFilters((current) => ({ ...current, status: event.currentTarget.value }))
-            }
-          >
-            <option value="">Status: all</option>
-            {STATUS_OPTIONS.map((status) => (
-              <option key={status} value={status}>
-                {status}
-              </option>
-            ))}
-          </select>
+          <article className="panel">
+            <h2>Settings</h2>
+            <label>
+              From
+              <input type="date" value={fromDate} onChange={(event) => setFromDate(event.currentTarget.value)} />
+            </label>
+            <label>
+              To
+              <input type="date" value={toDate} onChange={(event) => setToDate(event.currentTarget.value)} />
+            </label>
+            <select value={statusFilter} onChange={(event) => setStatusFilter(event.currentTarget.value)}>
+              <option value="">Status: all</option>
+              {STATUS_OPTIONS.map((status) => <option key={status} value={status}>{status}</option>)}
+            </select>
+            <select
+              value={resolvedFilter}
+              onChange={(event) => setResolvedFilter(event.currentTarget.value as ResolvedFilter)}
+            >
+              <option value="all">Resolve: all</option>
+              <option value="true">resolved</option>
+              <option value="false">open</option>
+            </select>
+          </article>
+        </aside>
 
-          <select
-            value={draftFilters.resolved}
-            onChange={(event) =>
-              setDraftFilters((current) => ({
-                ...current,
-                resolved: event.currentTarget.value as Filters['resolved'],
-              }))
-            }
-          >
-            <option value="all">Resolve: all</option>
-            <option value="true">resolved</option>
-            <option value="false">unresolved</option>
-          </select>
+        <main className="content">
+          <section className="panel">
+            <h2>思考の芝生</h2>
+            <div className="contrib">
+              {contributions.map((cell) => (
+                <div
+                  key={cell.date}
+                  className={`cell i${cell.intensity} ${cell.condition === 'stuck' ? 'stuck' : ''}`}
+                  title={`${cell.date} | total:${cell.total} stuck:${cell.stuck} resolved:${cell.resolved}`}
+                />
+              ))}
+            </div>
+          </section>
 
-          <input
-            type="date"
-            value={draftFilters.from}
-            onChange={(event) =>
-              setDraftFilters((current) => ({ ...current, from: event.currentTarget.value }))
-            }
-          />
-          <input
-            type="date"
-            value={draftFilters.to}
-            onChange={(event) =>
-              setDraftFilters((current) => ({ ...current, to: event.currentTarget.value }))
-            }
-          />
-          <button type="submit">絞り込み</button>
-          <button type="button" className="ghost" onClick={clearFilters}>
-            クリア
-          </button>
-        </form>
+          <section className="insight-grid">
+            <article className="panel">
+              <h3>今週投稿</h3>
+              <p className="metric">{summary?.total ?? 0}</p>
+            </article>
+            <article className="panel">
+              <h3>解決した課題数</h3>
+              <p className="metric">{summary?.resolved ?? 0}</p>
+            </article>
+            <article className="panel">
+              <h3>今週一番詰まったトピック</h3>
+              <p>{insightTopStuck}</p>
+            </article>
+          </section>
 
-        {error ? <p className="error">エラー: {error}</p> : null}
+          <section className="panel">
+            <div className="row header-row">
+              <h2>ナレッジ・タイムライン</h2>
+              <div className="row">
+                <button type="button" className={timelineView === 'list' ? 'active' : 'ghost'} onClick={() => setTimelineView('list')}>List</button>
+                <button type="button" className={timelineView === 'calendar' ? 'active' : 'ghost'} onClick={() => setTimelineView('calendar')}>Calendar</button>
+              </div>
+            </div>
 
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>時刻</th>
-                <th>Status</th>
-                <th>内容</th>
-                <th>Slack</th>
-                <th>Resolve</th>
-              </tr>
-            </thead>
-            <tbody>
-              {memos.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="empty">
-                    データがありません
-                  </td>
-                </tr>
-              ) : (
-                memos.map((memo) => (
-                  <tr key={memo.id}>
-                    <td>{memo.id}</td>
-                    <td>{formatDateTime(memo.created_at)}</td>
-                    <td>{memo.status ?? '-'}</td>
-                    <td className="content">{memo.content}</td>
-                    <td>{memo.sent_to_slack === 1 ? 'OK' : '未送信'}</td>
-                    <td>
+            {timelineView === 'list' ? (
+              <div className="timeline-list">
+                {timelineMemos.length === 0 ? <p>データがありません。</p> : timelineMemos.map((memo) => (
+                  <article key={memo.id} className="memo-card">
+                    <p className="meta">
+                      #{memo.id} {formatDateTime(memo.created_at)} / {memo.status ?? '-'} / {memo.mode}
+                    </p>
+                    <p>{memo.content}</p>
+                    <div className="row wrap">
+                      {memo.tags.map((tag) => <span key={tag} className="pill">#{tag}</span>)}
+                    </div>
+                    <div className="row">
                       <button
                         type="button"
-                        className={memo.resolved === 1 ? 'resolved' : 'unresolved'}
-                        disabled={updatingMemoId === memo.id}
+                        className={memo.resolved === 1 ? 'ok' : 'warn'}
                         onClick={() => void toggleResolved(memo)}
                       >
                         {memo.resolved === 1 ? 'resolved' : 'open'}
                       </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                      {memo.screenshot_url ? <a href={`${apiBase}${memo.screenshot_url}`} target="_blank">screenshot</a> : null}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className="calendar-list">
+                {timelineDays.length === 0 ? <p>データがありません。</p> : timelineDays.map((day) => (
+                  <div key={day.date} className="calendar-row">
+                    <strong>{day.date}</strong>
+                    <span>投稿 {day.total}</span>
+                    <span>詰まり {day.stuck}</span>
+                    <span>解決 {day.resolved}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
 
-        <footer className="pager">
-          <button type="button" disabled={!hasPrev || loading} onClick={() => setOffset(offset - PAGE_SIZE)}>
-            前へ
-          </button>
-          <span>{Math.floor(offset / PAGE_SIZE) + 1}ページ</span>
-          <button type="button" disabled={!hasNext || loading} onClick={() => setOffset(offset + PAGE_SIZE)}>
-            次へ
-          </button>
-        </footer>
+          <section className="panel">
+            <h2>AI技術ブログ下書き</h2>
+            <form className="draft-form" onSubmit={(event) => void generateDraft(event)}>
+              <input value={blogTitle} onChange={(event) => setBlogTitle(event.currentTarget.value)} placeholder="タイトル" />
+              <select value={blogMode} onChange={(event) => setBlogMode(event.currentTarget.value as ModeFilter)}>
+                <option value="all">Mode: all</option>
+                <option value="stockpile">ためるモード</option>
+                <option value="instant">即時モード</option>
+              </select>
+              <button type="submit" disabled={blogLoading}>{blogLoading ? '生成中...' : '下書き生成'}</button>
+            </form>
+            {blogDraft ? <pre className="draft">{blogDraft}</pre> : <p>期間を選択して生成してください。</p>}
+          </section>
+        </main>
       </section>
+
+      {error ? <p className="error">エラー: {error}</p> : null}
     </div>
   )
 }
