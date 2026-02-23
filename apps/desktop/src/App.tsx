@@ -132,6 +132,7 @@ function App() {
   const [evolutionToast, setEvolutionToast] = useState(false);
   const [isEvolving, setIsEvolving] = useState(false);
   const [sentSuccess, setSentSuccess] = useState(false);
+  const [variant, setVariant] = useState<1 | 2 | 3>(1);
 
   async function resizeWindow() {
     try {
@@ -389,27 +390,42 @@ function App() {
           type="button"
         >
           <span className="character-face">
-            <CharacterStage count={memoCount} size={44} />
+            <CharacterStage count={memoCount} size={44} variant={variant} />
           </span>
         </button>
         {/* プレビュー用ステージ切り替え */}
         <div className="preview-switcher">
-          {[
-            { count: 0, label: "たまご" },
-            { count: 5, label: "孵化" },
-            { count: 10, label: "ひよこ" },
-            { count: 30, label: "にわとり" },
-          ].map((stage) => (
-            <button
-              key={stage.count}
-              className={`preview-btn ${getCharacterStageId(memoCount) === getCharacterStageId(stage.count) ? "active" : ""}`}
-              onClick={() => setMemoCount(stage.count)}
-              type="button"
-            >
-              <CharacterStage count={stage.count} size={18} />
-              <span>{stage.label}</span>
-            </button>
-          ))}
+          <div className="preview-row">
+            {[
+              { count: 0, label: "たまご" },
+              { count: 5, label: "孵化" },
+              { count: 10, label: "ひよこ" },
+              { count: 30, label: "にわとり" },
+            ].map((stage) => (
+              <button
+                key={stage.count}
+                className={`preview-btn ${getCharacterStageId(memoCount) === getCharacterStageId(stage.count) ? "active" : ""}`}
+                onClick={() => setMemoCount(stage.count)}
+                type="button"
+              >
+                <CharacterStage count={stage.count} size={16} variant={variant} />
+                <span>{stage.label}</span>
+              </button>
+            ))}
+          </div>
+          <div className="preview-row">
+            {([1, 2, 3] as const).map((v) => (
+              <button
+                key={v}
+                className={`preview-btn variant-btn ${variant === v ? "active" : ""}`}
+                onClick={() => setVariant(v)}
+                type="button"
+              >
+                <CharacterStage count={memoCount} size={16} variant={v} />
+                <span>No.{v}</span>
+              </button>
+            ))}
+          </div>
         </div>
         {evolutionToast ? (
           <div className="evolution-toast">✨ 進化した！ {getCharacterEmoji(memoCount)}</div>

@@ -7,9 +7,12 @@ import "./characters.css";
 export interface CharacterSVGProps {
   size?: number;
   className?: string;
+  variant?: 1 | 2 | 3;
 }
 
 type CharacterStageId = "egg" | "hatching" | "chick" | "rooster";
+
+export const VARIANT_COUNT = 3;
 
 const CHARACTER_STAGES: { threshold: number; id: CharacterStageId; label: string }[] = [
   { threshold: 30, id: "rooster", label: "🐔" },
@@ -37,8 +40,9 @@ export function CharacterStage({
   count,
   size,
   className,
+  variant = 1,
 }: { count: number } & CharacterSVGProps) {
   const stageId = getCharacterStageId(count);
   const Component = SVG_MAP[stageId];
-  return <Component size={size} className={className} />;
+  return <Component size={size} className={className} variant={variant} />;
 }

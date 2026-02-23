@@ -794,12 +794,19 @@ textarea {
 /* === プレビュー用ステージ切り替え === */
 .preview-switcher {
   position: absolute;
-  bottom: -32px;
+  bottom: -56px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
-  gap: 3px;
+  flex-direction: column;
+  gap: 2px;
   white-space: nowrap;
+  align-items: center;
+}
+
+.preview-row {
+  display: flex;
+  gap: 3px;
 }
 
 .preview-btn {
