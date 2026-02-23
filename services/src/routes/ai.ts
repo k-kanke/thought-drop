@@ -75,6 +75,8 @@ router.post('/blog-draft', (req: Request, res: Response) => {
       range: { from, to },
       draft: `# ${title}\n\n対象期間のログがないため下書きを生成できませんでした。`,
       sections: [],
+      generator: 'template',
+      note: '現在はLLM未接続のため、テンプレートベースで下書きを生成しています。',
     });
     return;
   }
@@ -129,6 +131,8 @@ router.post('/blog-draft', (req: Request, res: Response) => {
     count: memos.length,
     draft,
     sections,
+    generator: 'template',
+    note: '現在はLLM未接続のため、テンプレートベースで下書きを生成しています。',
   });
 });
 

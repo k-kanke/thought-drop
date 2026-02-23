@@ -4,6 +4,7 @@ import path from 'path';
 import { MemoRequest } from '../types/memo';
 import { sendToSlack } from '../services/slack';
 import { isS3UploadEnabled, uploadLocalFileToS3 } from '../services/s3';
+import { feedCharacter } from '../services/character';
 import db from '../db/client';
 
 const router = Router();
@@ -168,45 +169,6 @@ function updateDailyStats(dateJst: string, memoDelta: number, stuckDelta: number
       resolved_count = resolved_count + excluded.resolved_count,
       updated_at = excluded.updated_at
   `).run(dateJst, memoDelta, stuckDelta, resolvedDelta, now);
-}
-
-function feedCharacter(pointsDelta: number): void {
-  const now = new Date().toISOString();
-  const state = db.prepare(`
-    SELECT level, points, hunger_score, evolution_path, last_fed_at
-    FROM character_state WHERE id = 1
-  `).get() as {
-    level: number;
-    points: number;
-    hunger_score: number;
-    evolution_path: string;
-    last_fed_at: string;
-  };
-
-  const nextPoints = Math.max(0, state.points + pointsDelta);
-  const nextLevel = Math.max(1, Math.floor(nextPoints / 20) + 1);
-  const nextHunger = Math.max(0, state.hunger_score - Math.max(1, Math.floor(pointsDelta / 2)));
-
-  db.prepare(`
-    UPDATE character_state
-    SET level = ?, points = ?, hunger_score = ?, last_fed_at = ?, updated_at = ?
-    WHERE id = 1
-  `).run(nextLevel, nextPoints, nextHunger, now, now);
-
-  const unlockRules = [
-    { threshold: 20, code: 'aws-cloud-hat' },
-    { threshold: 45, code: 'go-gopher-glasses' },
-    { threshold: 80, code: 'terraform-cape' },
-  ];
-  for (const rule of unlockRules) {
-    if (nextPoints >= rule.threshold) {
-      db.prepare(`
-        UPDATE character_items
-        SET unlocked = 1, unlocked_at = COALESCE(unlocked_at, ?)
-        WHERE code = ?
-      `).run(now, rule.code);
-    }
-  }
 }
 
 function syncMemoTags(memoId: number, tags: string[]): void {
