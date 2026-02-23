@@ -28,6 +28,7 @@ type TimerNotice = {
   id: number;
   message: string;
 };
+type PanelMode = "memo" | "agent";
 
 type TdState = {
   lastSentAtMs: number;
@@ -158,6 +159,7 @@ function App() {
   const [text, setText] = useState("");
   const [status, setStatus] = useState<Status>("集中");
   const [statusOpen, setStatusOpen] = useState(false);
+  const [panelMode, setPanelMode] = useState<PanelMode>("memo");
   const [lastSentAtMs, setLastSentAtMs] = useState(initialTdState.lastSentAtMs);
   const [remindAfterMin, setRemindAfterMin] = useState(initialTdState.remindAfterMin);
   const [snoozeUntilMs, setSnoozeUntilMs] = useState<number | null>(initialTdState.snoozeUntilMs);
@@ -244,7 +246,7 @@ function App() {
 
   useEffect(() => {
     void resizeWindow();
-  }, [isOpen, reminderVisible, timerNotice, statusOpen, clockOpen, message, text.length, sending]);
+  }, [isOpen, reminderVisible, timerNotice, statusOpen, clockOpen, message, text.length, sending, panelMode]);
 
   useEffect(() => {
     if (!timerNotice || isOpen) return;
@@ -697,7 +699,14 @@ useEffect(() => {
           <div className="drag-handle" data-tauri-drag-region title="drag" />
           <p className="eyebrow">Thought Drop</p>
           <div className="title-row">
-            <h1>今の思考をそのまま送る</h1>
+            <button
+              className={`agent-switch ${panelMode === "agent" ? "active" : ""}`}
+              onClick={() => setPanelMode((current) => (current === "memo" ? "agent" : "memo"))}
+              type="button"
+            >
+              <span className="agent-switch-icon" aria-hidden>🤖</span>
+              <span>{panelMode === "memo" ? "Agent" : "Memo"}</span>
+            </button>
             <div className="clock-controls" ref={clockRef}>
               <div className={`clock-pill ${activeTimeMode ? "active" : ""}`}>
                 {activeTimeMode ? (
@@ -869,88 +878,94 @@ useEffect(() => {
           </div>
         </header>
 
-        <div className="field">
-          <label htmlFor="user-input">Name</label>
-          <input
-            id="user-input"
-            value={user}
-            onChange={(event) => setUser(event.currentTarget.value)}
-            placeholder="teamK"
-          />
-        </div>
+        {panelMode === "memo" ? (
+          <>
+            <div className="field">
+              <label htmlFor="user-input">Name</label>
+              <input
+                id="user-input"
+                value={user}
+                onChange={(event) => setUser(event.currentTarget.value)}
+                placeholder="teamK"
+              />
+            </div>
 
-        <div className="field">
-          <span>Status</span>
-          <div className="status-select" ref={statusRef}>
-            <button
-              className="status-trigger"
-              onClick={() => setStatusOpen((current) => !current)}
-              type="button"
-            >
-              <span>{status}</span>
-              <span className={`caret ${statusOpen ? "open" : ""}`}>▾</span>
-            </button>
-            {statusOpen ? (
-              <div className="status-menu">
-                {STATUSES.map((item) => (
-                  <button
-                    key={item}
-                    className={`status-option ${status === item ? "active" : ""}`}
-                    onClick={() => {
-                      setStatus(item);
-                      setStatusOpen(false);
-                    }}
-                    type="button"
-                  >
-                    {item}
-                  </button>
-                ))}
+            <div className="field">
+              <span>Status</span>
+              <div className="status-select" ref={statusRef}>
+                <button
+                  className="status-trigger"
+                  onClick={() => setStatusOpen((current) => !current)}
+                  type="button"
+                >
+                  <span>{status}</span>
+                  <span className={`caret ${statusOpen ? "open" : ""}`}>▾</span>
+                </button>
+                {statusOpen ? (
+                  <div className="status-menu">
+                    {STATUSES.map((item) => (
+                      <button
+                        key={item}
+                        className={`status-option ${status === item ? "active" : ""}`}
+                        onClick={() => {
+                          setStatus(item);
+                          setStatusOpen(false);
+                        }}
+                        type="button"
+                      >
+                        {item}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
               </div>
+            </div>
+
+            <div className="field">
+              <label htmlFor="remind-min-input">Reminder Interval (min)</label>
+              <input
+                id="remind-min-input"
+                inputMode="numeric"
+                min={1}
+                onChange={(event) => {
+                  const value = Number(event.currentTarget.value);
+                  if (!Number.isFinite(value) || value <= 0) return;
+                  setRemindAfterMin(Math.floor(value));
+                }}
+                type="number"
+                value={remindAfterMin}
+              />
+            </div>
+
+            <div className="field memo-field">
+              <div className="memo-head">
+                <label htmlFor="memo-input">Memo</label>
+              </div>
+              <textarea
+                id="memo-input"
+                rows={5}
+                value={text}
+                onChange={(event) => setText(event.currentTarget.value)}
+                placeholder="いまの思考/詰まりをそのまま書く"
+              />
+            </div>
+
+            <footer className="panel-footer">
+              <button className="send secondary" onClick={() => void sendMemo(false)} disabled={sending} type="button">
+                {sending ? "Saving..." : "Save Memo"}
+              </button>
+              <button className="send" onClick={() => void sendMemo(true)} disabled={sending} type="button">
+                {sending ? "Saving..." : "Save with Screenshot"}
+              </button>
+            </footer>
+
+            {message ? (
+              <p className={`message ${message.startsWith("送信失敗") ? "error" : "ok"}`}>{message}</p>
             ) : null}
-          </div>
-        </div>
-
-        <div className="field">
-          <label htmlFor="remind-min-input">Reminder Interval (min)</label>
-          <input
-            id="remind-min-input"
-            inputMode="numeric"
-            min={1}
-            onChange={(event) => {
-              const value = Number(event.currentTarget.value);
-              if (!Number.isFinite(value) || value <= 0) return;
-              setRemindAfterMin(Math.floor(value));
-            }}
-            type="number"
-            value={remindAfterMin}
-          />
-        </div>
-
-        <div className="field memo-field">
-          <div className="memo-head">
-            <label htmlFor="memo-input">Memo</label>
-          </div>
-          <textarea
-            id="memo-input"
-            rows={5}
-            value={text}
-            onChange={(event) => setText(event.currentTarget.value)}
-            placeholder="いまの思考/詰まりをそのまま書く"
-          />
-        </div>
-
-        <footer className="panel-footer">
-          <button className="send secondary" onClick={() => void sendMemo(false)} disabled={sending} type="button">
-            {sending ? "Saving..." : "Save Memo"}
-          </button>
-          <button className="send" onClick={() => void sendMemo(true)} disabled={sending} type="button">
-            {sending ? "Saving..." : "Save with Screenshot"}
-          </button>
-        </footer>
-
-        {message ? (
-          <p className={`message ${message.startsWith("送信失敗") ? "error" : "ok"}`}>{message}</p>
-        ) : null}
+          </>
+        ) : (
+          <section className="agent-screen" aria-label="agent mode blank screen" />
+        )}
       </section>
     </main>
   );
