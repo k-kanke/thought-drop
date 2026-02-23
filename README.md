@@ -30,6 +30,30 @@ cp .env.example .env
 npm run dev
 ```
 
+DBスキーマは起動時に自動で適用されます（`initial schema + migrations`）。
+手動で適用だけ先に行いたい場合は、ルートで以下を実行:
+
+```bash
+make migrate
+```
+
+### 2.1 SQLiteを直接確認する
+
+```bash
+sqlite3 services/data/memos.db
+```
+
+対話モードでの基本コマンド:
+
+```sql
+.tables
+.schema memos
+.schema assets
+SELECT id, applied_at FROM schema_migrations ORDER BY id;
+SELECT id, content, created_at FROM memos ORDER BY id DESC LIMIT 5;
+.quit
+```
+
 ### 3. デスクトップアプリのセットアップと起動（別ターミナル）
 
 ```bash

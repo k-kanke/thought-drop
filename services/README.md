@@ -13,6 +13,38 @@ cp .env.example .env
 npm run dev
 ```
 
+## DBマイグレーション
+
+- サーバー起動時に自動適用される（`createInitialSchema` + 未適用 migration）
+- 手動で適用する場合:
+
+```bash
+npm run migrate
+```
+
+ルートから実行する場合:
+
+```bash
+make migrate
+```
+
+## SQLiteの確認コマンド
+
+```bash
+sqlite3 data/memos.db
+```
+
+対話モードでの基本コマンド:
+
+```sql
+.tables
+.schema memos
+.schema assets
+SELECT id, applied_at FROM schema_migrations ORDER BY id;
+SELECT id, content, created_at FROM memos ORDER BY id DESC LIMIT 5;
+.quit
+```
+
 ## 環境変数
 
 | 変数名 | 必須 | 説明 |
