@@ -176,6 +176,20 @@ function App() {
     }
   }
 
+  async function openScreenshot(memoId: number): Promise<void> {
+    setError(null)
+    try {
+      const response = await fetch(`${apiBase}/api/memo/${memoId}/screenshot-url`)
+      if (!response.ok) throw new Error(`screenshot API failed: ${response.status}`)
+      const data = (await response.json()) as { url: string }
+      const resolvedUrl = data.url.startsWith('http') ? data.url : `${apiBase}${data.url}`
+      window.open(resolvedUrl, '_blank', 'noopener,noreferrer')
+    } catch (unknownError) {
+      const detail = unknownError instanceof Error ? unknownError.message : String(unknownError)
+      setError(detail)
+    }
+  }
+
   async function evolve(path: string): Promise<void> {
     setError(null)
     try {
@@ -357,7 +371,11 @@ function App() {
                       >
                         {memo.resolved === 1 ? 'resolved' : 'open'}
                       </button>
-                      {memo.screenshot_url ? <a href={`${apiBase}${memo.screenshot_url}`} target="_blank">screenshot</a> : null}
+                      {memo.screenshot_url ? (
+                        <button type="button" className="ghost" onClick={() => void openScreenshot(memo.id)}>
+                          screenshot
+                        </button>
+                      ) : null}
                     </div>
                   </article>
                 ))}

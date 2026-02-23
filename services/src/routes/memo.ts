@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { MemoRequest } from '../types/memo';
 import { sendToSlack } from '../services/slack';
-import { isS3UploadEnabled, uploadLocalFileToS3 } from '../services/s3';
+import { createSignedObjectUrl, isS3UploadEnabled, uploadLocalFileToS3 } from '../services/s3';
 import db from '../db/client';
 
 const router = Router();
@@ -415,6 +415,52 @@ router.get('/last', (_req: Request, res: Response) => {
   res.status(200).json({ last_memo_at: row.created_at });
 });
 
+router.get('/:id/screenshot-url', async (req: Request, res: Response) => {
+  const memoId = Number(req.params.id);
+  if (!Number.isInteger(memoId) || memoId <= 0) {
+    res.status(400).json({ error: 'Invalid memo id' });
+    return;
+  }
+
+  const asset = db.prepare(`
+    SELECT id, local_path, status, s3_bucket, s3_key
+    FROM assets
+    WHERE memo_id = ? AND kind = 'screenshot'
+    ORDER BY id DESC
+    LIMIT 1
+  `).get(memoId) as
+    | {
+      id: number;
+      local_path: string;
+      status: string;
+      s3_bucket: string | null;
+      s3_key: string | null;
+    }
+    | undefined;
+
+  if (!asset) {
+    res.status(404).json({ error: 'Screenshot not found' });
+    return;
+  }
+
+  if (asset.status === 'uploaded' && asset.s3_bucket && asset.s3_key) {
+    try {
+      const url = await createSignedObjectUrl({
+        bucket: asset.s3_bucket,
+        key: asset.s3_key,
+      });
+      res.status(200).json({ url, source: 's3' });
+      return;
+    } catch (error) {
+      console.error('[Route] Failed to create signed screenshot URL:', error);
+      res.status(500).json({ error: 'Failed to create signed URL' });
+      return;
+    }
+  }
+
+  res.status(200).json({ url: `/${asset.local_path}`, source: 'local' });
+});
+
 router.get('/timeline', (req: Request, res: Response) => {
   const view = typeof req.query.view === 'string' ? req.query.view : 'list';
   const limit = Math.min(Number(req.query.limit) || 50, 200);
@@ -467,7 +513,11 @@ router.get('/timeline', (req: Request, res: Response) => {
       m.id, m.content, m.status, m.sent_to_slack, m.resolved, m.created_at, m.mode, m.stuck_minutes,
       COALESCE(GROUP_CONCAT(t.name, ' '), '') AS tags,
       (
-        SELECT '/' || a.local_path
+        SELECT
+          CASE
+            WHEN a.status = 'uploaded' AND a.s3_url IS NOT NULL THEN a.s3_url
+            ELSE '/' || a.local_path
+          END
         FROM assets a
         WHERE a.memo_id = m.id AND a.kind = 'screenshot'
         ORDER BY a.id DESC

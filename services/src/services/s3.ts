@@ -1,4 +1,5 @@
-import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import fs from 'fs';
 
 const DEFAULT_AWS_REGION = 'ap-northeast-1';
@@ -80,4 +81,21 @@ export async function uploadLocalFileToS3(params: {
     key,
     url: buildPublicObjectUrl(bucket, region, key),
   };
+}
+
+export async function createSignedObjectUrl(params: {
+  bucket: string;
+  key: string;
+  expiresInSec?: number;
+}): Promise<string> {
+  const { region } = getEnv();
+  const expiresInSec = params.expiresInSec ?? 300;
+  return getSignedUrl(
+    getClient(region),
+    new GetObjectCommand({
+      Bucket: params.bucket,
+      Key: params.key,
+    }),
+    { expiresIn: expiresInSec },
+  );
 }
