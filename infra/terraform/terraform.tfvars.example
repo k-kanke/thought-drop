@@ -1,0 +1,15 @@
+aws_region    = "ap-northeast-1"
+project       = "thought-drop"
+environment   = "dev"
+
+# null の場合は自動生成名を使います
+bucket_name = null
+
+# 本番は false 推奨
+bucket_force_destroy = false
+
+# アプリで使うS3 key prefix
+s3_prefix = "uploads/"
+
+# true にすると IAM access key を作成します（stateに秘密が残る点に注意）
+create_access_key = false

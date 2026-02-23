@@ -45,3 +45,12 @@ tmp/
 temp/
 MEMO.txt
 data/
+
+# Terraform
+.terraform/
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+!.tfvars.example

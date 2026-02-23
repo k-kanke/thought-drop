@@ -52,6 +52,9 @@ SELECT id, content, created_at FROM memos ORDER BY id DESC LIMIT 5;
 | `SLACK_WEBHOOK_URL` | ✅ | Slack の Incoming Webhook URL |
 | `USER_NAME` | - | Slackメッセージに表示する名前（未設定時はホスト名） |
 | `PORT` | - | ポート番号（デフォルト: 3001） |
+| `AWS_REGION` | - | S3リージョン（デフォルト: `ap-northeast-1`） |
+| `S3_BUCKET` | - | 設定時、スクリーンショットをS3へアップロード |
+| `S3_PREFIX` | - | S3キーprefix（デフォルト: `uploads/`） |
 
 ## API
 
