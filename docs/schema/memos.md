@@ -11,6 +11,7 @@ CREATE TABLE memos (
   content TEXT NOT NULL,
   status TEXT,
   sent_to_slack INTEGER NOT NULL DEFAULT 0,
+  resolved INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
   updated_at TEXT
 );
@@ -26,6 +27,7 @@ CREATE TABLE memos (
 | content | text |  | false |  |  |  | Memo content |
 | status | text |  | true |  |  |  | Memo status label |
 | sent_to_slack | integer | 0 | false | DEFAULT |  |  | Slack sent flag (0/1) |
+| resolved | integer | 0 | false | DEFAULT |  |  | Resolved flag (0/1) |
 | created_at | text | `strftime('%Y-%m-%dT%H:%M:%SZ', 'now')` | false | DEFAULT |  |  | Created at (UTC ISO8601) |
 | updated_at | text |  | true |  |  |  | Updated at (UTC ISO8601) |
 
@@ -53,6 +55,7 @@ erDiagram
   text content "Memo content"
   text status "Memo status label"
   integer sent_to_slack "Slack sent flag (0/1)"
+  integer resolved "Resolved flag (0/1)"
   text created_at "Created at (UTC ISO8601)"
   text updated_at "Updated at (UTC ISO8601)"
 }
