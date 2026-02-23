@@ -86,3 +86,15 @@ pnpm -C apps/web dev
 - キャラクターボタン（🐣）クリックで入力UIが開閉する
 - 送信でSlackに投稿される（API経由）
 - 失敗時にUIにエラーメッセージが出る
+
+## AWS (Terraform)
+
+S3にスクリーンショット保存するための最小構成は `infra/terraform` にあります。
+
+```bash
+cd infra/terraform
+cp terraform.tfvars.example terraform.tfvars
+terraform init
+terraform plan
+terraform apply
+```
