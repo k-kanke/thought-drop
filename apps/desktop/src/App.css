@@ -51,6 +51,7 @@ body {
 
 .app.collapsed.with-reminder {
   justify-content: flex-start;
+  align-items: flex-start;
   padding: 10px;
 }
 
@@ -116,14 +117,18 @@ body {
 .timer-bubble {
   position: absolute;
   left: calc(100% + 10px);
-  top: 4px;
-  width: 140px;
+  top: auto;
+  bottom: 0;
+  width: 184px;
   border-radius: 14px;
   background: #ffffff;
   border: 1px solid #d4e0ef;
   box-shadow: 0 10px 22px rgba(16, 38, 61, 0.2);
-  padding: 10px;
+  padding: 8px 10px;
   z-index: 31;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .reminder-bubble::before {
@@ -143,7 +148,8 @@ body {
   content: "";
   position: absolute;
   left: -8px;
-  top: 14px;
+  top: auto;
+  bottom: 14px;
   width: 12px;
   height: 12px;
   transform: rotate(45deg);
@@ -166,6 +172,20 @@ body {
   font-weight: 700;
   color: #233654;
   line-height: 1.35;
+  flex: 1;
+}
+
+.timer-ok {
+  border: 1px solid #c4d5eb;
+  border-radius: 8px;
+  background: #f5f9ff;
+  color: #23416a;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 8px;
+  cursor: pointer;
+  flex-shrink: 0;
 }
 
 .reminder-actions {
@@ -394,7 +414,7 @@ textarea {
 }
 
 .clock-pill.active {
-  width: 96px;
+  width: 138px;
   background: linear-gradient(180deg, #f8fbff, #e8f1ff);
   border-color: #9dbce8;
 }
@@ -448,6 +468,7 @@ textarea {
 .clock-time {
   letter-spacing: 0;
   margin-left: 0;
+  font-size: 11px;
 }
 
 .clock-icon {
@@ -489,7 +510,7 @@ textarea {
   position: absolute;
   top: calc(100% + 6px);
   right: 0;
-  width: 162px;
+  width: 224px;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.98);
@@ -500,7 +521,7 @@ textarea {
 
 .clock-mode-buttons {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: 6px;
 }
 
@@ -579,6 +600,53 @@ textarea {
   border: 1px solid #c4d5eb;
   padding: 0 4px;
   font-size: 12px;
+  text-align: center;
+}
+
+.pomodoro-meta {
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px solid #d7e4f6;
+  border-radius: 8px;
+  background: #f7fbff;
+}
+
+.pomodoro-meta p {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: #33547c;
+  line-height: 1.35;
+}
+
+.pomodoro-meta p + p {
+  margin-top: 3px;
+}
+
+.pomodoro-inputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.pomodoro-inputs label {
+  margin: 0;
+  color: #36557c;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.pomodoro-inputs input {
+  width: 36px;
+  height: 24px;
+  border-radius: 8px;
+  border: 1px solid #c4d5eb;
+  padding: 0 4px;
+  font-size: 11px;
   text-align: center;
 }
 

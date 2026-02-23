@@ -11,6 +11,10 @@ const DEFAULT_REMIND_AFTER_MIN = 1;
 const DEFAULT_SNOOZE_MIN = 30;
 const DEFAULT_TIMER_HOURS = 0;
 const DEFAULT_TIMER_MINUTES = 5;
+const DEFAULT_POMODORO_FOCUS_MIN = 25;
+const DEFAULT_POMODORO_SHORT_BREAK_MIN = 5;
+const DEFAULT_POMODORO_LONG_BREAK_MIN = 15;
+const DEFAULT_POMODORO_LONG_BREAK_EVERY = 4;
 // 退化のチェック間隔（ms）
 const DECAY_CHECK_INTERVAL_MS = 60_000; // 1分ごとにチェック
 
@@ -18,7 +22,12 @@ const DECAY_CHECK_INTERVAL_MS = 60_000; // 1分ごとにチェック
 // 例: 60分で1段階, 120分で2段階, 240分で3段階
 const DECAY_LEVEL_THRESHOLDS_MIN = [1, 120, 240];
 
-type TimeMode = "stopwatch" | "timer";
+type TimeMode = "stopwatch" | "timer" | "pomodoro";
+type PomodoroPhase = "focus" | "shortBreak" | "longBreak";
+type TimerNotice = {
+  id: number;
+  message: string;
+};
 
 type TdState = {
   lastSentAtMs: number;
@@ -62,6 +71,8 @@ const COLLAPSED_WIDTH = 132;
 const COLLAPSED_HEIGHT = 132;
 const REMINDER_WIDTH = 290;
 const REMINDER_HEIGHT = 132;
+const NOTICE_SAFE_WIDTH = 420;
+const NOTICE_SAFE_HEIGHT = 340;
 const OPEN_MIN_WIDTH = 460;
 const OPEN_MIN_HEIGHT = 440;
 const OPEN_PADDING = 10;
@@ -122,6 +133,21 @@ function parseTimerInput(value: string, max: number): number {
   return Math.min(max, Math.floor(numericValue));
 }
 
+function getPomodoroPhaseLabel(phase: PomodoroPhase): string {
+  if (phase === "focus") return "Focus";
+  if (phase === "shortBreak") return "Break";
+  return "Long Break";
+}
+
+function getPomodoroDurationMs(
+  phase: PomodoroPhase,
+  config: { focusMin: number; shortBreakMin: number; longBreakMin: number },
+): number {
+  if (phase === "focus") return config.focusMin * 60 * 1000;
+  if (phase === "shortBreak") return config.shortBreakMin * 60 * 1000;
+  return config.longBreakMin * 60 * 1000;
+}
+
 function App() {
   const apiBase = useMemo(
     () => (import.meta.env.VITE_API_BASE_URL as string) || "http://127.0.0.1:3001",
@@ -148,14 +174,23 @@ function App() {
   const [elapsedBeforePauseMs, setElapsedBeforePauseMs] = useState(0);
   const [activeTimerDurationMs, setActiveTimerDurationMs] = useState(0);
   const [timeDisplayMs, setTimeDisplayMs] = useState(0);
-  const [timerNoticeVisible, setTimerNoticeVisible] = useState(false);
+  const [timerNotice, setTimerNotice] = useState<TimerNotice | null>(null);
+  const [pomodoroPhase, setPomodoroPhase] = useState<PomodoroPhase | null>(null);
+  const [pomodoroCompletedFocusCount, setPomodoroCompletedFocusCount] = useState(0);
   const [timerHoursInput, setTimerHoursInput] = useState(formatTwoDigits(DEFAULT_TIMER_HOURS));
   const [timerMinutesInput, setTimerMinutesInput] = useState(formatTwoDigits(DEFAULT_TIMER_MINUTES));
+  const [pomodoroFocusInput, setPomodoroFocusInput] = useState(String(DEFAULT_POMODORO_FOCUS_MIN));
+  const [pomodoroShortBreakInput, setPomodoroShortBreakInput] = useState(String(DEFAULT_POMODORO_SHORT_BREAK_MIN));
+  const [pomodoroLongBreakInput, setPomodoroLongBreakInput] = useState(String(DEFAULT_POMODORO_LONG_BREAK_MIN));
+  const [pomodoroLongBreakEveryInput, setPomodoroLongBreakEveryInput] = useState(
+    String(DEFAULT_POMODORO_LONG_BREAK_EVERY),
+  );
   const pointerDown = useRef<{ x: number; y: number } | null>(null);
   const dragged = useRef(false);
   const statusRef = useRef<HTMLDivElement | null>(null);
   const clockRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLElement | null>(null);
+  const timerBubbleRef = useRef<HTMLElement | null>(null);
   const prevEmojiRef = useRef(getCharacterEmoji(initialTdState.memoCount));
   const evolutionTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const [evolutionToast, setEvolutionToast] = useState(false);
@@ -166,7 +201,24 @@ function App() {
     try {
       const appWindow = getCurrentWindow();
       if (!isOpen) {
-        if (reminderVisible) {
+        if (timerNotice) {
+          const bubble = timerBubbleRef.current;
+          const bubbleWidth = bubble ? Math.ceil(bubble.scrollWidth) : 184;
+          const bubbleHeight = bubble ? Math.ceil(bubble.scrollHeight) : 90;
+          const bubbleTop = bubble ? Math.ceil(bubble.offsetTop) : 4;
+          const noticeWidth = Math.max(
+            REMINDER_WIDTH,
+            Math.ceil(10 + ICON_SIZE + 10 + bubbleWidth + 20),
+            NOTICE_SAFE_WIDTH,
+          );
+          const noticeHeight = Math.max(
+            REMINDER_HEIGHT,
+            Math.ceil(10 + Math.max(ICON_SIZE, bubbleTop + bubbleHeight) + 20),
+            NOTICE_SAFE_HEIGHT,
+          );
+
+          await appWindow.setSize(new LogicalSize(noticeWidth, noticeHeight));
+        } else if (reminderVisible) {
           await appWindow.setSize(new LogicalSize(REMINDER_WIDTH, REMINDER_HEIGHT));
         } else {
           await appWindow.setSize(new LogicalSize(COLLAPSED_WIDTH, COLLAPSED_HEIGHT));
@@ -192,7 +244,15 @@ function App() {
 
   useEffect(() => {
     void resizeWindow();
-  }, [isOpen, reminderVisible, statusOpen, clockOpen, message, text.length, sending]);
+  }, [isOpen, reminderVisible, timerNotice, statusOpen, clockOpen, message, text.length, sending]);
+
+  useEffect(() => {
+    if (!timerNotice || isOpen) return;
+    const id = window.requestAnimationFrame(() => {
+      void resizeWindow();
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [timerNotice, isOpen]);
 
 useEffect(() => {
   function updateDecayLevel() {
@@ -263,6 +323,22 @@ useEffect(() => {
     return () => window.removeEventListener("mousedown", handleOutsideClick);
   }, []);
 
+  const timerHours = parseTimerInput(timerHoursInput, 99);
+  const timerMinutes = parseTimerInput(timerMinutesInput, 59);
+  const timerDurationMs = (timerHours * 60 * 60 + timerMinutes * 60) * 1000;
+  const pomodoroFocusMin = parseTimerInput(pomodoroFocusInput, 180);
+  const pomodoroShortBreakMin = parseTimerInput(pomodoroShortBreakInput, 60);
+  const pomodoroLongBreakMin = parseTimerInput(pomodoroLongBreakInput, 90);
+  const pomodoroLongBreakEvery = parseTimerInput(pomodoroLongBreakEveryInput, 12);
+  const startTimerDisabled =
+    (selectedTimeMode === "timer" && timerDurationMs <= 0) ||
+    (selectedTimeMode === "pomodoro" &&
+      (pomodoroFocusMin <= 0 || pomodoroShortBreakMin <= 0 || pomodoroLongBreakMin <= 0 || pomodoroLongBreakEvery <= 0));
+
+  function showTimerNotice(nextMessage: string) {
+    setTimerNotice({ id: Date.now(), message: nextMessage });
+  }
+
   useEffect(() => {
     if (!timeRunning || !timeStartedAtMs || !activeTimeMode) return;
 
@@ -275,15 +351,63 @@ useEffect(() => {
       const remainingMs = Math.max(0, activeTimerDurationMs - elapsedMs);
       setTimeDisplayMs(remainingMs);
       if (remainingMs === 0) {
+        if (activeTimeMode === "pomodoro") {
+          const now = Date.now();
+          if (pomodoroPhase === "focus") {
+            const nextFocusCount = pomodoroCompletedFocusCount + 1;
+            const nextBreakPhase: PomodoroPhase =
+              nextFocusCount % pomodoroLongBreakEvery === 0 ? "longBreak" : "shortBreak";
+            const nextDurationMs = getPomodoroDurationMs(nextBreakPhase, {
+              focusMin: pomodoroFocusMin,
+              shortBreakMin: pomodoroShortBreakMin,
+              longBreakMin: pomodoroLongBreakMin,
+            });
+
+            setPomodoroCompletedFocusCount(nextFocusCount);
+            setPomodoroPhase(nextBreakPhase);
+            setTimeStartedAtMs(now);
+            setElapsedBeforePauseMs(0);
+            setActiveTimerDurationMs(nextDurationMs);
+            setTimeDisplayMs(nextDurationMs);
+            showTimerNotice("お疲れ！休憩時間だよ");
+            return;
+          }
+
+          const nextDurationMs = getPomodoroDurationMs("focus", {
+            focusMin: pomodoroFocusMin,
+            shortBreakMin: pomodoroShortBreakMin,
+            longBreakMin: pomodoroLongBreakMin,
+          });
+          setPomodoroPhase("focus");
+          setTimeStartedAtMs(now);
+          setElapsedBeforePauseMs(0);
+          setActiveTimerDurationMs(nextDurationMs);
+          setTimeDisplayMs(nextDurationMs);
+          showTimerNotice("よし！作業だ！");
+          return;
+        }
+
         setTimeRunning(false);
         setActiveTimeMode(null);
         setElapsedBeforePauseMs(0);
-        setTimerNoticeVisible(true);
+        showTimerNotice("タイマー終了！");
       }
     }, 200);
 
     return () => window.clearInterval(intervalId);
-  }, [timeRunning, timeStartedAtMs, activeTimeMode, activeTimerDurationMs, elapsedBeforePauseMs]);
+  }, [
+    timeRunning,
+    timeStartedAtMs,
+    activeTimeMode,
+    activeTimerDurationMs,
+    elapsedBeforePauseMs,
+    pomodoroPhase,
+    pomodoroCompletedFocusCount,
+    pomodoroFocusMin,
+    pomodoroShortBreakMin,
+    pomodoroLongBreakMin,
+    pomodoroLongBreakEvery,
+  ]);
 
   useEffect(() => {
     const currentEmoji = getCharacterEmoji(memoCount);
@@ -297,15 +421,17 @@ useEffect(() => {
     }
   }, [memoCount]);
 
-  const timerHours = parseTimerInput(timerHoursInput, 99);
-  const timerMinutes = parseTimerInput(timerMinutesInput, 59);
-  const timerDurationMs = (timerHours * 60 * 60 + timerMinutes * 60) * 1000;
-  const startTimerDisabled = selectedTimeMode === "timer" && timerDurationMs <= 0;
-
   function startTime() {
     const now = Date.now();
     if (selectedTimeMode === "timer" && timerDurationMs <= 0) {
       setMessage("Timerは1分以上で設定してください");
+      return;
+    }
+    if (
+      selectedTimeMode === "pomodoro" &&
+      (pomodoroFocusMin <= 0 || pomodoroShortBreakMin <= 0 || pomodoroLongBreakMin <= 0 || pomodoroLongBreakEvery <= 0)
+    ) {
+      setMessage("Pomodoroの設定値は1以上で入力してください");
       return;
     }
 
@@ -314,9 +440,25 @@ useEffect(() => {
     setTimeRunning(true);
     setTimeStartedAtMs(now);
     setElapsedBeforePauseMs(0);
-    setActiveTimerDurationMs(selectedTimeMode === "timer" ? timerDurationMs : 0);
-    setTimeDisplayMs(selectedTimeMode === "stopwatch" ? 0 : timerDurationMs);
-    setTimerNoticeVisible(false);
+    setTimerNotice(null);
+
+    if (selectedTimeMode === "pomodoro") {
+      const durationMs = getPomodoroDurationMs("focus", {
+        focusMin: pomodoroFocusMin,
+        shortBreakMin: pomodoroShortBreakMin,
+        longBreakMin: pomodoroLongBreakMin,
+      });
+      setPomodoroPhase("focus");
+      setPomodoroCompletedFocusCount(0);
+      setActiveTimerDurationMs(durationMs);
+      setTimeDisplayMs(durationMs);
+    } else {
+      setPomodoroPhase(null);
+      setPomodoroCompletedFocusCount(0);
+      setActiveTimerDurationMs(selectedTimeMode === "timer" ? timerDurationMs : 0);
+      setTimeDisplayMs(selectedTimeMode === "stopwatch" ? 0 : timerDurationMs);
+    }
+
     setClockOpen(false);
   }
 
@@ -328,7 +470,9 @@ useEffect(() => {
     setActiveTimerDurationMs(0);
     setTimeDisplayMs(0);
     setClockOpen(false);
-    setTimerNoticeVisible(false);
+    setTimerNotice(null);
+    setPomodoroPhase(null);
+    setPomodoroCompletedFocusCount(0);
   }
 
   function togglePauseResume() {
@@ -494,7 +638,9 @@ useEffect(() => {
   }
 
   return (
-    <main className={`app ${isOpen ? "open" : "collapsed"} ${reminderVisible && !isOpen ? "with-reminder" : ""}`}>
+    <main
+      className={`app ${isOpen ? "open" : "collapsed"} ${(reminderVisible || timerNotice) && !isOpen ? "with-reminder" : ""}`}
+    >
       <div className="avatar-area">
         <button
           className={`character${isEvolving ? " evolving" : ""}`}
@@ -508,17 +654,15 @@ useEffect(() => {
         {evolutionToast ? (
           <div className="evolution-toast">✨ 進化した！ {getCharacterEmoji(memoCount)}</div>
         ) : null}
-        {timerNoticeVisible ? (
-          <aside className="timer-bubble">
-            <p>タイマー終了！</p>
-            <div className="reminder-actions">
-              <button onClick={() => setTimerNoticeVisible(false)} type="button">
-                OK
-              </button>
-            </div>
+        {timerNotice ? (
+          <aside className="timer-bubble" key={timerNotice.id} ref={timerBubbleRef}>
+            <p>{timerNotice.message}</p>
+            <button className="timer-ok" onClick={() => setTimerNotice(null)} type="button">
+              OK
+            </button>
           </aside>
         ) : null}
-        {!timerNoticeVisible && reminderVisible && !isOpen ? (
+        {!timerNotice && reminderVisible && !isOpen ? (
           <aside className="reminder-bubble">
             <p>そろそろ思考をメモする？</p>
             <div className="reminder-actions">
@@ -566,7 +710,11 @@ useEffect(() => {
                 <div className="clock-widget">
                   <button className="clock-trigger" onClick={() => setClockOpen((current) => !current)} type="button">
                     {activeTimeMode ? (
-                      <span className="clock-time">{formatElapsed(timeDisplayMs)}</span>
+                      <span className="clock-time">
+                        {activeTimeMode === "pomodoro" && pomodoroPhase
+                          ? `${getPomodoroPhaseLabel(pomodoroPhase)} ${formatElapsed(timeDisplayMs)}`
+                          : formatElapsed(timeDisplayMs)}
+                      </span>
                     ) : (
                       <span aria-hidden className="clock-icon">
                         <span className="clock-icon-ring" />
@@ -591,6 +739,13 @@ useEffect(() => {
                           type="button"
                         >
                           Timer
+                        </button>
+                        <button
+                          className={selectedTimeMode === "pomodoro" ? "active" : ""}
+                          onClick={() => setSelectedTimeMode("pomodoro")}
+                          type="button"
+                        >
+                          Pomodoro
                         </button>
                       </div>
                       {selectedTimeMode === "timer" ? (
@@ -623,6 +778,79 @@ useEffect(() => {
                             />
                             m
                           </label>
+                        </div>
+                      ) : null}
+                      {selectedTimeMode === "pomodoro" ? (
+                        <div className="pomodoro-meta">
+                          <div className="pomodoro-inputs">
+                            <label htmlFor="pomodoro-focus-input">
+                              Focus
+                              <input
+                                id="pomodoro-focus-input"
+                                inputMode="numeric"
+                                maxLength={3}
+                                onBlur={() => setPomodoroFocusInput(String(pomodoroFocusMin || DEFAULT_POMODORO_FOCUS_MIN))}
+                                onChange={(event) =>
+                                  setPomodoroFocusInput(event.currentTarget.value.replace(/[^\d]/g, "").slice(0, 3))
+                                }
+                                type="text"
+                                value={pomodoroFocusInput}
+                              />
+                              m
+                            </label>
+                            <label htmlFor="pomodoro-short-break-input">
+                              Short
+                              <input
+                                id="pomodoro-short-break-input"
+                                inputMode="numeric"
+                                maxLength={2}
+                                onBlur={() =>
+                                  setPomodoroShortBreakInput(String(pomodoroShortBreakMin || DEFAULT_POMODORO_SHORT_BREAK_MIN))
+                                }
+                                onChange={(event) =>
+                                  setPomodoroShortBreakInput(event.currentTarget.value.replace(/[^\d]/g, "").slice(0, 2))
+                                }
+                                type="text"
+                                value={pomodoroShortBreakInput}
+                              />
+                              m
+                            </label>
+                            <label htmlFor="pomodoro-long-break-input">
+                              Long
+                              <input
+                                id="pomodoro-long-break-input"
+                                inputMode="numeric"
+                                maxLength={2}
+                                onBlur={() =>
+                                  setPomodoroLongBreakInput(String(pomodoroLongBreakMin || DEFAULT_POMODORO_LONG_BREAK_MIN))
+                                }
+                                onChange={(event) =>
+                                  setPomodoroLongBreakInput(event.currentTarget.value.replace(/[^\d]/g, "").slice(0, 2))
+                                }
+                                type="text"
+                                value={pomodoroLongBreakInput}
+                              />
+                              m
+                            </label>
+                            <label htmlFor="pomodoro-long-break-every-input">
+                              Every
+                              <input
+                                id="pomodoro-long-break-every-input"
+                                inputMode="numeric"
+                                maxLength={2}
+                                onBlur={() =>
+                                  setPomodoroLongBreakEveryInput(String(pomodoroLongBreakEvery || DEFAULT_POMODORO_LONG_BREAK_EVERY))
+                                }
+                                onChange={(event) =>
+                                  setPomodoroLongBreakEveryInput(event.currentTarget.value.replace(/[^\d]/g, "").slice(0, 2))
+                                }
+                                type="text"
+                                value={pomodoroLongBreakEveryInput}
+                              />
+                              focus
+                            </label>
+                          </div>
+                          <p>Completed Focus: {pomodoroCompletedFocusCount}</p>
                         </div>
                       ) : null}
                       <button className="clock-start" disabled={startTimerDisabled} onClick={startTime} type="button">
