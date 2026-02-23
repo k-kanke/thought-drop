@@ -17,7 +17,19 @@ type TdState = {
   lastSentAtMs: number;
   remindAfterMin: number;
   snoozeUntilMs: number | null;
+  memoCount: number;
 };
+
+const CHARACTER_STAGES: { threshold: number; emoji: string }[] = [
+  { threshold: 30, emoji: "🐔" },
+  { threshold: 10, emoji: "🐥" },
+  { threshold: 5, emoji: "🐣" },
+  { threshold: 0, emoji: "🥚" },
+];
+
+function getCharacterEmoji(count: number): string {
+  return CHARACTER_STAGES.find((s) => count >= s.threshold)?.emoji ?? "🥚";
+}
 
 const COLLAPSED_WIDTH = 132;
 const COLLAPSED_HEIGHT = 132;
@@ -38,6 +50,7 @@ function loadTdState(): TdState {
         lastSentAtMs: now,
         remindAfterMin: DEFAULT_REMIND_AFTER_MIN,
         snoozeUntilMs: null,
+        memoCount: 0,
       };
     }
     const parsed = JSON.parse(raw) as Partial<TdState>;
@@ -49,12 +62,14 @@ function loadTdState(): TdState {
       lastSentAtMs: typeof parsed.lastSentAtMs === "number" ? parsed.lastSentAtMs : now,
       remindAfterMin,
       snoozeUntilMs: typeof parsed.snoozeUntilMs === "number" ? parsed.snoozeUntilMs : null,
+      memoCount: typeof parsed.memoCount === "number" && parsed.memoCount >= 0 ? parsed.memoCount : 0,
     };
   } catch {
     return {
       lastSentAtMs: now,
       remindAfterMin: DEFAULT_REMIND_AFTER_MIN,
       snoozeUntilMs: null,
+      memoCount: 0,
     };
   }
 }
@@ -93,6 +108,7 @@ function App() {
   const [lastSentAtMs, setLastSentAtMs] = useState(initialTdState.lastSentAtMs);
   const [remindAfterMin, setRemindAfterMin] = useState(initialTdState.remindAfterMin);
   const [snoozeUntilMs, setSnoozeUntilMs] = useState<number | null>(initialTdState.snoozeUntilMs);
+  const [memoCount, setMemoCount] = useState(initialTdState.memoCount);
   const [reminderVisible, setReminderVisible] = useState(false);
   const [user, setUser] = useState("teamK");
   const [sending, setSending] = useState(false);
@@ -113,6 +129,10 @@ function App() {
   const statusRef = useRef<HTMLDivElement | null>(null);
   const clockRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLElement | null>(null);
+  const prevEmojiRef = useRef(getCharacterEmoji(initialTdState.memoCount));
+  const evolutionTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+  const [evolutionToast, setEvolutionToast] = useState(false);
+  const [isEvolving, setIsEvolving] = useState(false);
 
   async function resizeWindow() {
     try {
@@ -153,9 +173,10 @@ function App() {
         lastSentAtMs,
         remindAfterMin,
         snoozeUntilMs,
+        memoCount,
       }),
     );
-  }, [lastSentAtMs, remindAfterMin, snoozeUntilMs]);
+  }, [lastSentAtMs, remindAfterMin, snoozeUntilMs, memoCount]);
 
   useEffect(() => {
     function checkReminder() {
@@ -211,6 +232,18 @@ function App() {
 
     return () => window.clearInterval(intervalId);
   }, [timeRunning, timeStartedAtMs, activeTimeMode, activeTimerDurationMs, elapsedBeforePauseMs]);
+
+  useEffect(() => {
+    const currentEmoji = getCharacterEmoji(memoCount);
+    if (currentEmoji !== prevEmojiRef.current) {
+      prevEmojiRef.current = currentEmoji;
+      if (evolutionTimerRef.current !== null) window.clearTimeout(evolutionTimerRef.current);
+      setEvolutionToast(true);
+      setIsEvolving(true);
+      window.setTimeout(() => setIsEvolving(false), 600);
+      evolutionTimerRef.current = window.setTimeout(() => setEvolutionToast(false), 2500);
+    }
+  }, [memoCount]);
 
   const timerHours = parseTimerInput(timerHoursInput, 99);
   const timerMinutes = parseTimerInput(timerMinutesInput, 59);
@@ -327,6 +360,7 @@ function App() {
         setLastSentAtMs(now);
         setSnoozeUntilMs(null);
         setReminderVisible(false);
+        setMemoCount((c) => c + 1);
         setMessage(result.message ?? "Slackに送信しました");
       }
     } catch (error: unknown) {
@@ -341,14 +375,17 @@ function App() {
     <main className={`app ${isOpen ? "open" : "collapsed"} ${reminderVisible && !isOpen ? "with-reminder" : ""}`}>
       <div className="avatar-area">
         <button
-          className="character"
+          className={`character${isEvolving ? " evolving" : ""}`}
           onPointerDown={handleCharacterPointerDown}
           onPointerMove={handleCharacterPointerMove}
           onPointerUp={handleCharacterPointerUp}
           type="button"
         >
-          <span className="character-face">🐣</span>
+          <span className="character-face">{getCharacterEmoji(memoCount)}</span>
         </button>
+        {evolutionToast ? (
+          <div className="evolution-toast">✨ 進化した！ {getCharacterEmoji(memoCount)}</div>
+        ) : null}
         {timerNoticeVisible ? (
           <aside className="timer-bubble">
             <p>タイマー終了！</p>
