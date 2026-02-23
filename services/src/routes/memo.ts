@@ -57,13 +57,36 @@ router.get('/', (req: Request, res: Response) => {
   const offset = Number(req.query.offset) || 0;
 
   const rows = db.prepare(`
-    SELECT id, content, status, sent_to_slack, created_at
+    SELECT id, content, status, sent_to_slack, resolved, created_at
     FROM memos
     ORDER BY created_at DESC
     LIMIT ? OFFSET ?
   `).all(limit, offset);
 
   res.status(200).json({ memos: rows });
+});
+
+// PATCH /api/memo/:id/resolve - 解決済みフラグの切り替え
+router.patch('/:id/resolve', (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: 'Invalid memo id' });
+    return;
+  }
+
+  const memo = db.prepare('SELECT id, resolved FROM memos WHERE id = ?').get(id) as
+    | { id: number; resolved: number }
+    | undefined;
+
+  if (!memo) {
+    res.status(404).json({ error: 'Memo not found' });
+    return;
+  }
+
+  const newResolved = memo.resolved === 1 ? 0 : 1;
+  db.prepare('UPDATE memos SET resolved = ? WHERE id = ?').run(newResolved, id);
+
+  res.status(200).json({ id, resolved: newResolved });
 });
 
 export default router;
