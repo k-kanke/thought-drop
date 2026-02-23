@@ -586,6 +586,7 @@ textarea {
   margin-top: 8px;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 8px;
 }
 
@@ -596,7 +597,6 @@ textarea {
 }
 
 .send {
-  margin-left: auto;
   border: 0;
   border-radius: 12px;
   padding: 10px 16px;
@@ -611,6 +611,11 @@ textarea {
 
 .send:hover {
   transform: translateY(-1px);
+}
+
+.send.secondary {
+  background: linear-gradient(140deg, #8aa2c8, #6f8cb8);
+  box-shadow: 0 10px 20px rgba(66, 93, 136, 0.24);
 }
 
 .send:disabled {
