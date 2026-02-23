@@ -1,5 +1,6 @@
 import { type PointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import { LogicalSize, getCurrentWindow } from "@tauri-apps/api/window";
+import { CharacterStage, getCharacterEmoji, getCharacterStageId } from "./components/characters";
 import "./App.css";
 
 type Status = "集中" | "調査中" | "詰まり" | "レビュー待ち";
@@ -20,16 +21,13 @@ type TdState = {
   memoCount: number;
 };
 
-const CHARACTER_STAGES: { threshold: number; emoji: string }[] = [
-  { threshold: 30, emoji: "🐔" },
-  { threshold: 10, emoji: "🐥" },
-  { threshold: 5, emoji: "🐣" },
-  { threshold: 0, emoji: "🥚" },
-];
 
-function getCharacterEmoji(count: number): string {
-  return CHARACTER_STAGES.find((s) => count >= s.threshold)?.emoji ?? "🥚";
-}
+const STATUS_AURA: Record<Status, string> = {
+  "集中": "status-focused",
+  "調査中": "status-investigating",
+  "詰まり": "status-stuck",
+  "レビュー待ち": "status-review",
+};
 
 const COLLAPSED_WIDTH = 132;
 const COLLAPSED_HEIGHT = 132;
@@ -129,10 +127,11 @@ function App() {
   const statusRef = useRef<HTMLDivElement | null>(null);
   const clockRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLElement | null>(null);
-  const prevEmojiRef = useRef(getCharacterEmoji(initialTdState.memoCount));
+  const prevStageRef = useRef(getCharacterStageId(initialTdState.memoCount));
   const evolutionTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const [evolutionToast, setEvolutionToast] = useState(false);
   const [isEvolving, setIsEvolving] = useState(false);
+  const [sentSuccess, setSentSuccess] = useState(false);
 
   async function resizeWindow() {
     try {
@@ -234,9 +233,9 @@ function App() {
   }, [timeRunning, timeStartedAtMs, activeTimeMode, activeTimerDurationMs, elapsedBeforePauseMs]);
 
   useEffect(() => {
-    const currentEmoji = getCharacterEmoji(memoCount);
-    if (currentEmoji !== prevEmojiRef.current) {
-      prevEmojiRef.current = currentEmoji;
+    const currentStage = getCharacterStageId(memoCount);
+    if (currentStage !== prevStageRef.current) {
+      prevStageRef.current = currentStage;
       if (evolutionTimerRef.current !== null) window.clearTimeout(evolutionTimerRef.current);
       setEvolutionToast(true);
       setIsEvolving(true);
@@ -361,6 +360,8 @@ function App() {
         setSnoozeUntilMs(null);
         setReminderVisible(false);
         setMemoCount((c) => c + 1);
+        setSentSuccess(true);
+        window.setTimeout(() => setSentSuccess(false), 800);
         setMessage(result.message ?? "Slackに送信しました");
       }
     } catch (error: unknown) {
@@ -375,14 +376,41 @@ function App() {
     <main className={`app ${isOpen ? "open" : "collapsed"} ${reminderVisible && !isOpen ? "with-reminder" : ""}`}>
       <div className="avatar-area">
         <button
-          className={`character${isEvolving ? " evolving" : ""}`}
+          className={[
+            "character",
+            STATUS_AURA[status],
+            isEvolving && "evolving",
+            sentSuccess && "sent-success",
+            reminderVisible && !isOpen && "reminding",
+          ].filter(Boolean).join(" ")}
           onPointerDown={handleCharacterPointerDown}
           onPointerMove={handleCharacterPointerMove}
           onPointerUp={handleCharacterPointerUp}
           type="button"
         >
-          <span className="character-face">{getCharacterEmoji(memoCount)}</span>
+          <span className="character-face">
+            <CharacterStage count={memoCount} size={44} />
+          </span>
         </button>
+        {/* プレビュー用ステージ切り替え */}
+        <div className="preview-switcher">
+          {[
+            { count: 0, label: "たまご" },
+            { count: 5, label: "孵化" },
+            { count: 10, label: "ひよこ" },
+            { count: 30, label: "にわとり" },
+          ].map((stage) => (
+            <button
+              key={stage.count}
+              className={`preview-btn ${getCharacterStageId(memoCount) === getCharacterStageId(stage.count) ? "active" : ""}`}
+              onClick={() => setMemoCount(stage.count)}
+              type="button"
+            >
+              <CharacterStage count={stage.count} size={18} />
+              <span>{stage.label}</span>
+            </button>
+          ))}
+        </div>
         {evolutionToast ? (
           <div className="evolution-toast">✨ 進化した！ {getCharacterEmoji(memoCount)}</div>
         ) : null}
