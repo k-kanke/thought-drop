@@ -11,6 +11,12 @@ const DEFAULT_REMIND_AFTER_MIN = 1;
 const DEFAULT_SNOOZE_MIN = 30;
 const DEFAULT_TIMER_HOURS = 0;
 const DEFAULT_TIMER_MINUTES = 5;
+// 退化のチェック間隔（ms）
+const DECAY_CHECK_INTERVAL_MS = 60_000; // 1分ごとにチェック
+
+// 放置時間と退化レベルのしきい値（分）
+// 例: 60分で1段階, 120分で2段階, 240分で3段階
+const DECAY_LEVEL_THRESHOLDS_MIN = [1, 120, 240];
 
 type TimeMode = "stopwatch" | "timer";
 
@@ -24,14 +30,34 @@ type TdState = {
 const CHARACTER_STAGES: { threshold: number; emoji: string }[] = [
   { threshold: 30, emoji: "🐔" },
   { threshold: 10, emoji: "🐥" },
-  { threshold: 5, emoji: "🐣" },
+  { threshold: 1, emoji: "🐣" },
   { threshold: 0, emoji: "🥚" },
 ];
+
 
 function getCharacterEmoji(count: number): string {
   return CHARACTER_STAGES.find((s) => count >= s.threshold)?.emoji ?? "🥚";
 }
 
+// ステージ index を返す
+function getCharacterStageIndex(count: number): number {
+  for (let i = 0; i < CHARACTER_STAGES.length; i += 1) {
+    if (count >= CHARACTER_STAGES[i].threshold) {
+      return i;
+    }
+  }
+  return CHARACTER_STAGES.length - 1;
+}
+
+//退化レベル込みの emoji
+function getCharacterEmojiWithDecay(count: number, decayLevel: number): string {
+  const baseIndex = getCharacterStageIndex(count);
+  const decayedIndex = Math.min(
+    CHARACTER_STAGES.length - 1,
+    baseIndex + decayLevel, // decayLevel 分だけ「後ろのステージ」にずらす（=退化）
+  );
+  return CHARACTER_STAGES[decayedIndex].emoji;
+}
 const COLLAPSED_WIDTH = 132;
 const COLLAPSED_HEIGHT = 132;
 const REMINDER_WIDTH = 290;
@@ -134,6 +160,7 @@ function App() {
   const evolutionTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const [evolutionToast, setEvolutionToast] = useState(false);
   const [isEvolving, setIsEvolving] = useState(false);
+  const [decayLevel, setDecayLevel] = useState(0); // 0=退化なし, 1〜で段階的に退化
 
   async function resizeWindow() {
     try {
@@ -166,6 +193,30 @@ function App() {
   useEffect(() => {
     void resizeWindow();
   }, [isOpen, reminderVisible, statusOpen, clockOpen, message, text.length, sending]);
+
+useEffect(() => {
+  function updateDecayLevel() {
+    const now = Date.now();
+    const idleMinutes = (now - lastSentAtMs) / (60 * 1000);
+
+    let level = 0;
+    if (idleMinutes >= DECAY_LEVEL_THRESHOLDS_MIN[2]) {
+      level = 3;
+    } else if (idleMinutes >= DECAY_LEVEL_THRESHOLDS_MIN[1]) {
+      level = 2;
+    } else if (idleMinutes >= DECAY_LEVEL_THRESHOLDS_MIN[0]) {
+      level = 1;
+    } else {
+      level = 0;
+    }
+
+    setDecayLevel(level);
+  }
+
+  updateDecayLevel(); // マウント時にも一回計算
+  const id = window.setInterval(updateDecayLevel, DECAY_CHECK_INTERVAL_MS);
+  return () => window.clearInterval(id);
+}, [lastSentAtMs]);
 
   useEffect(() => {
     localStorage.setItem(
@@ -427,6 +478,7 @@ function App() {
         setSnoozeUntilMs(null);
         setReminderVisible(false);
         setMemoCount((c) => c + 1);
+        setDecayLevel(0);
         if (withScreenshot) {
           setMessage(result.screenshot_url ? "メモとスクリーンショットを保存しました" : "メモは保存しました");
         } else {
@@ -451,7 +503,7 @@ function App() {
           onPointerUp={handleCharacterPointerUp}
           type="button"
         >
-          <span className="character-face">{getCharacterEmoji(memoCount)}</span>
+          <span className="character-face">{getCharacterEmojiWithDecay(memoCount, decayLevel)}</span>
         </button>
         {evolutionToast ? (
           <div className="evolution-toast">✨ 進化した！ {getCharacterEmoji(memoCount)}</div>
