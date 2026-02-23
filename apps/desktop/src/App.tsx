@@ -22,8 +22,8 @@ type TdState = {
 
 const CHARACTER_STAGES: { threshold: number; emoji: string }[] = [
   { threshold: 30, emoji: "🐔" },
-  { threshold: 15, emoji: "🐥" },
-  { threshold: 1, emoji: "🐣" },
+  { threshold: 10, emoji: "🐥" },
+  { threshold: 5, emoji: "🐣" },
   { threshold: 0, emoji: "🥚" },
 ];
 
@@ -129,6 +129,10 @@ function App() {
   const statusRef = useRef<HTMLDivElement | null>(null);
   const clockRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLElement | null>(null);
+  const prevEmojiRef = useRef(getCharacterEmoji(initialTdState.memoCount));
+  const evolutionTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+  const [evolutionToast, setEvolutionToast] = useState(false);
+  const [isEvolving, setIsEvolving] = useState(false);
 
   async function resizeWindow() {
     try {
@@ -228,6 +232,18 @@ function App() {
 
     return () => window.clearInterval(intervalId);
   }, [timeRunning, timeStartedAtMs, activeTimeMode, activeTimerDurationMs, elapsedBeforePauseMs]);
+
+  useEffect(() => {
+    const currentEmoji = getCharacterEmoji(memoCount);
+    if (currentEmoji !== prevEmojiRef.current) {
+      prevEmojiRef.current = currentEmoji;
+      if (evolutionTimerRef.current !== null) window.clearTimeout(evolutionTimerRef.current);
+      setEvolutionToast(true);
+      setIsEvolving(true);
+      window.setTimeout(() => setIsEvolving(false), 600);
+      evolutionTimerRef.current = window.setTimeout(() => setEvolutionToast(false), 2500);
+    }
+  }, [memoCount]);
 
   const timerHours = parseTimerInput(timerHoursInput, 99);
   const timerMinutes = parseTimerInput(timerMinutesInput, 59);
@@ -359,7 +375,7 @@ function App() {
     <main className={`app ${isOpen ? "open" : "collapsed"} ${reminderVisible && !isOpen ? "with-reminder" : ""}`}>
       <div className="avatar-area">
         <button
-          className="character"
+          className={`character${isEvolving ? " evolving" : ""}`}
           onPointerDown={handleCharacterPointerDown}
           onPointerMove={handleCharacterPointerMove}
           onPointerUp={handleCharacterPointerUp}
@@ -367,6 +383,9 @@ function App() {
         >
           <span className="character-face">{getCharacterEmoji(memoCount)}</span>
         </button>
+        {evolutionToast ? (
+          <div className="evolution-toast">✨ 進化した！ {getCharacterEmoji(memoCount)}</div>
+        ) : null}
         {timerNoticeVisible ? (
           <aside className="timer-bubble">
             <p>タイマー終了！</p>
