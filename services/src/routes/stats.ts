@@ -18,6 +18,25 @@ function buildDateRange(fromRaw: unknown, toRaw: unknown): { from: string; to: s
   return safeFrom <= to ? { from: safeFrom, to } : { from: to, to: safeFrom };
 }
 
+function backfillDailyStatsFromMemos(): void {
+  db.exec(`
+    INSERT INTO daily_stats (date_jst, memo_count, stuck_count, resolved_count, updated_at)
+    SELECT
+      date(datetime(created_at, '+9 hours')) AS date_jst,
+      COUNT(*) AS memo_count,
+      SUM(CASE WHEN status = '詰まり' THEN 1 ELSE 0 END) AS stuck_count,
+      SUM(resolved) AS resolved_count,
+      strftime('%Y-%m-%dT%H:%M:%SZ', 'now') AS updated_at
+    FROM memos
+    GROUP BY date(datetime(created_at, '+9 hours'))
+    ON CONFLICT(date_jst) DO UPDATE SET
+      memo_count = excluded.memo_count,
+      stuck_count = excluded.stuck_count,
+      resolved_count = excluded.resolved_count,
+      updated_at = excluded.updated_at;
+  `);
+}
+
 router.get('/daily', (req: Request, res: Response) => {
   const days = parseDays(req.query.days, 90, 365);
   const offsetDays = -(days - 1);
@@ -68,7 +87,7 @@ router.get('/summary', (_req: Request, res: Response) => {
 
 router.get('/contributions', (req: Request, res: Response) => {
   const { from, to } = buildDateRange(req.query.from, req.query.to);
-  const rows = db.prepare(`
+  let rows = db.prepare(`
     SELECT
       date_jst AS date,
       memo_count AS total,
@@ -78,6 +97,23 @@ router.get('/contributions', (req: Request, res: Response) => {
     WHERE date_jst BETWEEN ? AND ?
     ORDER BY date_jst ASC
   `).all(from, to) as Array<{ date: string; total: number; stuck: number; resolved: number }>;
+
+  if (rows.length === 0) {
+    const memoCount = db.prepare('SELECT COUNT(*) AS count FROM memos').get() as { count: number };
+    if (memoCount.count > 0) {
+      backfillDailyStatsFromMemos();
+      rows = db.prepare(`
+        SELECT
+          date_jst AS date,
+          memo_count AS total,
+          stuck_count AS stuck,
+          resolved_count AS resolved
+        FROM daily_stats
+        WHERE date_jst BETWEEN ? AND ?
+        ORDER BY date_jst ASC
+      `).all(from, to) as Array<{ date: string; total: number; stuck: number; resolved: number }>;
+    }
+  }
 
   const byDate = new Map(rows.map((row) => [row.date, row]));
   const result: Array<{

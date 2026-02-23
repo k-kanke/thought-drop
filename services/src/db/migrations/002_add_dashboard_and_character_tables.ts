@@ -86,5 +86,22 @@ export const migration002: Migration = {
       ('go-gopher-glasses', 'Goのゴーファー風メガネ', 0),
       ('terraform-cape', 'Terraformケープ', 0);
     `);
+
+    db.exec(`
+      INSERT INTO daily_stats (date_jst, memo_count, stuck_count, resolved_count, updated_at)
+      SELECT
+        date(datetime(created_at, '+9 hours')) AS date_jst,
+        COUNT(*) AS memo_count,
+        SUM(CASE WHEN status = '詰まり' THEN 1 ELSE 0 END) AS stuck_count,
+        SUM(resolved) AS resolved_count,
+        strftime('%Y-%m-%dT%H:%M:%SZ', 'now') AS updated_at
+      FROM memos
+      GROUP BY date(datetime(created_at, '+9 hours'))
+      ON CONFLICT(date_jst) DO UPDATE SET
+        memo_count = excluded.memo_count,
+        stuck_count = excluded.stuck_count,
+        resolved_count = excluded.resolved_count,
+        updated_at = excluded.updated_at;
+    `);
   },
 };
