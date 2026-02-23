@@ -2,60 +2,55 @@ use tauri::Manager;
 
 #[tauri::command]
 fn capture_screenshot_data_url(window: tauri::Window) -> Result<String, String> {
-    #[cfg(target_os = "macos")]
-    {
-        use base64::Engine;
-        use std::fs;
-        use std::process::Command;
-        use std::time::{SystemTime, UNIX_EPOCH};
+    use base64::Engine;
+    use image::codecs::png::PngEncoder;
+    use image::{ColorType, ImageEncoder};
+    use screenshots::Screen;
 
-        let monitor = window
-            .current_monitor()
-            .map_err(|e| format!("failed to get current monitor: {e}"))?
-            .or_else(|| {
-                window
-                    .primary_monitor()
-                    .map_err(|e| format!("failed to get primary monitor: {e}"))
-                    .ok()
-                    .flatten()
-            })
-            .ok_or_else(|| "monitor not found".to_string())?;
+    let monitor = window
+        .current_monitor()
+        .map_err(|e| format!("failed to get current monitor: {e}"))?
+        .or_else(|| {
+            window
+                .primary_monitor()
+                .map_err(|e| format!("failed to get primary monitor: {e}"))
+                .ok()
+                .flatten()
+        })
+        .ok_or_else(|| "monitor not found".to_string())?;
 
-        let position = monitor.position();
-        let size = monitor.size();
-        let capture_rect = format!("{},{},{},{}", position.x, position.y, size.width, size.height);
+    let monitor_position = monitor.position();
+    let monitor_size = monitor.size();
 
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_err(|e| format!("failed to read system time: {e}"))?
-            .as_millis();
-        let temp_path = std::env::temp_dir().join(format!("thought_drop_capture_{timestamp}.png"));
+    let screens = Screen::all().map_err(|e| format!("failed to enumerate screens: {e}"))?;
+    let target_screen = screens
+        .into_iter()
+        .find(|screen| {
+            let info = screen.display_info;
+            info.x == monitor_position.x
+                && info.y == monitor_position.y
+                && info.width == monitor_size.width
+                && info.height == monitor_size.height
+        })
+        .ok_or_else(|| "target screen not found".to_string())?;
 
-        let status = Command::new("screencapture")
-            .arg("-x")
-            .arg("-t")
-            .arg("png")
-            .arg("-R")
-            .arg(capture_rect)
-            .arg(&temp_path)
-            .status()
-            .map_err(|e| format!("failed to launch screencapture: {e}"))?;
+    let image = target_screen
+        .capture()
+        .map_err(|e| format!("failed to capture screen: {e}"))?;
 
-        if !status.success() {
-            return Err("screencapture command failed".to_string());
-        }
+    let mut png = Vec::new();
+    let encoder = PngEncoder::new(&mut png);
+    encoder
+        .write_image(
+            image.as_raw(),
+            image.width(),
+            image.height(),
+            ColorType::Rgba8.into(),
+        )
+        .map_err(|e| format!("failed to encode png: {e}"))?;
 
-        let bytes = fs::read(&temp_path).map_err(|e| format!("failed to read capture file: {e}"))?;
-        let _ = fs::remove_file(&temp_path);
-
-        let encoded = base64::engine::general_purpose::STANDARD.encode(bytes);
-        return Ok(format!("data:image/png;base64,{encoded}"));
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        Err("screenshot command is not implemented on this OS yet".to_string())
-    }
+    let encoded = base64::engine::general_purpose::STANDARD.encode(png);
+    Ok(format!("data:image/png;base64,{encoded}"))
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
