@@ -17,5 +17,6 @@ db.pragma('journal_mode = WAL');
 
 createInitialSchema(db);
 runMigrations(db);
+db.close();
 
-export default db;
+console.log(`[migrate] completed: ${DB_PATH}`);
