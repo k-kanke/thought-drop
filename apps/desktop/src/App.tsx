@@ -1,4 +1,5 @@
 import { type PointerEvent, useEffect, useMemo, useRef, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { LogicalSize, getCurrentWindow } from "@tauri-apps/api/window";
 import "./App.css";
 
@@ -326,11 +327,72 @@ function App() {
     dragged.current = false;
   }
 
-  async function sendMemo() {
+  async function captureScreenshotDataUrl(): Promise<string> {
+    try {
+      return await invoke<string>("capture_screenshot_data_url");
+    } catch {
+      // Fallback for browser runtime.
+    }
+
+    if (!navigator.mediaDevices?.getDisplayMedia) {
+      throw new Error("この環境ではスクリーンショット取得に対応していません");
+    }
+
+    const stream = await navigator.mediaDevices.getDisplayMedia({
+      video: true,
+      audio: false,
+    });
+
+    try {
+      const video = document.createElement("video");
+      video.srcObject = stream;
+      video.muted = true;
+      video.playsInline = true;
+      await video.play();
+
+      await new Promise<void>((resolve) => {
+        if (video.readyState >= 2) {
+          resolve();
+          return;
+        }
+        video.onloadeddata = () => resolve();
+      });
+
+      if (!video.videoWidth || !video.videoHeight) {
+        throw new Error("スクリーンショットの解像度取得に失敗しました");
+      }
+
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const context = canvas.getContext("2d");
+      if (!context) {
+        throw new Error("スクリーンショット描画コンテキストの作成に失敗しました");
+      }
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL("image/png");
+    } finally {
+      stream.getTracks().forEach((track) => track.stop());
+    }
+  }
+
+  async function sendMemo(withScreenshot: boolean) {
     setMessage(null);
     if (!text.trim()) {
       setMessage("本文が空です");
       return;
+    }
+
+    let screenshotDataUrl: string | undefined;
+    if (withScreenshot) {
+      try {
+        setMessage("スクリーンショット取得中...");
+        screenshotDataUrl = await captureScreenshotDataUrl();
+      } catch (error: unknown) {
+        const detail = error instanceof Error ? error.message : String(error);
+        setMessage(`スクリーンショット取得失敗: ${detail}`);
+        return;
+      }
     }
 
     setSending(true);
@@ -343,6 +405,7 @@ function App() {
           status,
           user: user.trim(),
           timestamp: new Date().toISOString(),
+          screenshotDataUrl,
         }),
       });
 
@@ -351,9 +414,12 @@ function App() {
         throw new Error(`API failed: ${response.status} ${body}`);
       }
 
-      const result = (await response.json().catch(() => ({}))) as { message?: string };
+      const result = (await response.json().catch(() => ({}))) as {
+        message?: string;
+        screenshot_url?: string | null;
+      };
       if (response.status === 207) {
-        setMessage("メモは保存しましたが、Slack送信に失敗しました");
+        setMessage(result.message ?? "メモは保存しましたが、一部処理に失敗しました");
       } else {
         const now = Date.now();
         setText("");
@@ -361,7 +427,11 @@ function App() {
         setSnoozeUntilMs(null);
         setReminderVisible(false);
         setMemoCount((c) => c + 1);
-        setMessage(result.message ?? "Slackに送信しました");
+        if (withScreenshot) {
+          setMessage(result.screenshot_url ? "メモとスクリーンショットを保存しました" : "メモは保存しました");
+        } else {
+          setMessage(result.message ?? "メモを保存しました");
+        }
       }
     } catch (error: unknown) {
       const detail = error instanceof Error ? error.message : String(error);
@@ -590,8 +660,11 @@ function App() {
         </div>
 
         <footer className="panel-footer">
-          <button className="send" onClick={sendMemo} disabled={sending} type="button">
-            {sending ? "Sending..." : "Send to Slack"}
+          <button className="send secondary" onClick={() => void sendMemo(false)} disabled={sending} type="button">
+            {sending ? "Saving..." : "Save Memo"}
+          </button>
+          <button className="send" onClick={() => void sendMemo(true)} disabled={sending} type="button">
+            {sending ? "Saving..." : "Save with Screenshot"}
           </button>
         </footer>
 
