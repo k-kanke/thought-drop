@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useMemo, useState } from 'react'
+import { type FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import './App.css'
 
 type Summary = {
@@ -100,7 +100,7 @@ function App() {
   const [blogDraft, setBlogDraft] = useState('')
   const [blogLoading, setBlogLoading] = useState(false)
 
-  async function fetchDashboard(): Promise<void> {
+  const fetchDashboard = useCallback(async (): Promise<void> => {
     setLoading(true)
     setError(null)
     try {
@@ -154,11 +154,11 @@ function App() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [apiBase, timelineView, statusFilter, tagFilter, resolvedFilter, fromDate, toDate])
 
   useEffect(() => {
     void fetchDashboard()
-  }, [timelineView, statusFilter, tagFilter, resolvedFilter, fromDate, toDate])
+  }, [fetchDashboard])
 
   async function toggleResolved(memo: TimelineMemo): Promise<void> {
     setError(null)
