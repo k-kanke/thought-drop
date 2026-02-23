@@ -483,7 +483,7 @@ function App() {
         </header>
 
         <div className="field">
-          <label htmlFor="user-input">ユーザー</label>
+          <label htmlFor="user-input">Name</label>
           <input
             id="user-input"
             value={user}
@@ -493,7 +493,7 @@ function App() {
         </div>
 
         <div className="field">
-          <span>ステータス</span>
+          <span>Status</span>
           <div className="status-select" ref={statusRef}>
             <button
               className="status-trigger"
@@ -524,7 +524,7 @@ function App() {
         </div>
 
         <div className="field">
-          <label htmlFor="remind-min-input">リマインド間隔（分）</label>
+          <label htmlFor="remind-min-input">Reminder Interval (min)</label>
           <input
             id="remind-min-input"
             inputMode="numeric"
@@ -541,7 +541,7 @@ function App() {
 
         <div className="field memo-field">
           <div className="memo-head">
-            <label htmlFor="memo-input">メモ</label>
+            <label htmlFor="memo-input">Memo</label>
           </div>
           <textarea
             id="memo-input"
@@ -553,7 +553,6 @@ function App() {
         </div>
 
         <footer className="panel-footer">
-          <p className="counter">{text.trim().length} chars</p>
           <button className="send" onClick={sendMemo} disabled={sending} type="button">
             {sending ? "Sending..." : "Send to Slack"}
           </button>
