@@ -70,12 +70,29 @@ erDiagram
 
 "memos" {
   integer id PK "Memo ID"
+  text content "Memo content"
+  text status "Memo status label"
+  integer sent_to_slack "Slack sent flag (0/1)"
+  text created_at "Created at (UTC ISO8601)"
+  text updated_at "Updated at (UTC ISO8601)"
+  integer resolved "Resolved flag (0/1)"
 }
 "assets" {
   integer id PK "Asset ID"
   integer memo_id FK "Parent memo ID"
   text kind "Asset kind"
+  text local_path "Local file path"
+  text mime_type "MIME type"
+  integer file_size "File size (bytes)"
+  text sha256 "File hash"
   text status "Upload state"
+  text s3_bucket "S3 bucket"
+  text s3_key "S3 object key"
+  text s3_url "S3 URL/cache field"
+  text uploaded_at "Uploaded at (UTC ISO8601)"
+  text error_message "Last upload error"
+  text created_at "Created at (UTC ISO8601)"
+  text updated_at "Updated at (UTC ISO8601)"
 }
 ```
 
