@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { MemoRequest } from '../types/memo';
 import { sendToSlack } from '../services/slack';
+import { isS3UploadEnabled, uploadLocalFileToS3 } from '../services/s3';
 import db from '../db/client';
 
 const router = Router();
@@ -41,7 +42,18 @@ function parseScreenshotDataUrl(dataUrl: string): ScreenshotPayload {
   };
 }
 
-function saveScreenshotAsset(memoId: number, dataUrl: string, timestamp: string): { id: number; urlPath: string } {
+function saveScreenshotAsset(
+  memoId: number,
+  dataUrl: string,
+  timestamp: string,
+): {
+  id: number;
+  urlPath: string;
+  absolutePath: string;
+  relativePath: string;
+  filename: string;
+  mimeType: string;
+} {
   const parsed = parseScreenshotDataUrl(dataUrl);
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
@@ -59,6 +71,10 @@ function saveScreenshotAsset(memoId: number, dataUrl: string, timestamp: string)
   return {
     id: Number(result.lastInsertRowid),
     urlPath: `/${relativePath}`,
+    absolutePath,
+    relativePath,
+    filename,
+    mimeType: parsed.mimeType,
   };
 }
 
@@ -127,6 +143,59 @@ router.post('/', async (req: Request, res: Response) => {
     try {
       const saved = saveScreenshotAsset(memoId, screenshotDataUrl, createdAt);
       screenshotUrl = saved.urlPath;
+
+      if (isS3UploadEnabled()) {
+        try {
+          db.prepare(`
+            UPDATE assets
+            SET status = 'uploading', updated_at = ?, error_message = NULL
+            WHERE id = ?
+          `).run(new Date().toISOString(), saved.id);
+
+          const uploaded = await uploadLocalFileToS3({
+            absolutePath: saved.absolutePath,
+            filename: saved.filename,
+            mimeType: saved.mimeType,
+            memoId,
+            createdAtIso: createdAt,
+          });
+
+          db.prepare(`
+            UPDATE assets
+            SET status = 'uploaded',
+                s3_bucket = ?,
+                s3_key = ?,
+                s3_url = ?,
+                uploaded_at = ?,
+                updated_at = ?,
+                error_message = NULL
+            WHERE id = ?
+          `).run(
+            uploaded.bucket,
+            uploaded.key,
+            uploaded.url,
+            createdAt,
+            new Date().toISOString(),
+            saved.id,
+          );
+
+          try {
+            fs.unlinkSync(saved.absolutePath);
+          } catch (cleanupError) {
+            console.warn('[Route] Failed to cleanup local screenshot file:', cleanupError);
+          }
+
+          screenshotUrl = uploaded.url;
+        } catch (error) {
+          const uploadErr = error instanceof Error ? error.message : String(error);
+          db.prepare(`
+            UPDATE assets
+            SET status = 'failed', error_message = ?, updated_at = ?
+            WHERE id = ?
+          `).run(uploadErr, new Date().toISOString(), saved.id);
+          screenshotError = `s3 upload failed: ${uploadErr}`;
+        }
+      }
     } catch (error) {
       console.error('[Route] Failed to save screenshot:', error);
       screenshotError = error instanceof Error ? error.message : String(error);
