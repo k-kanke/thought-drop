@@ -29,6 +29,10 @@ type TimerNotice = {
   message: string;
 };
 type PanelMode = "memo" | "agent";
+type AgentMessage = {
+  role: "user" | "assistant";
+  text: string;
+};
 
 type TdState = {
   lastSentAtMs: number;
@@ -160,6 +164,12 @@ function App() {
   const [status, setStatus] = useState<Status>("集中");
   const [statusOpen, setStatusOpen] = useState(false);
   const [panelMode, setPanelMode] = useState<PanelMode>("memo");
+  const [agentInput, setAgentInput] = useState("");
+  const [agentMenuOpen, setAgentMenuOpen] = useState(false);
+  const [agentWithScreenshot, setAgentWithScreenshot] = useState(false);
+  const [agentMessages, setAgentMessages] = useState<AgentMessage[]>([]);
+  const [agentSending, setAgentSending] = useState(false);
+  const [agentError, setAgentError] = useState<string | null>(null);
   const [lastSentAtMs, setLastSentAtMs] = useState(initialTdState.lastSentAtMs);
   const [remindAfterMin, setRemindAfterMin] = useState(initialTdState.remindAfterMin);
   const [snoozeUntilMs, setSnoozeUntilMs] = useState<number | null>(initialTdState.snoozeUntilMs);
@@ -191,6 +201,7 @@ function App() {
   const dragged = useRef(false);
   const statusRef = useRef<HTMLDivElement | null>(null);
   const clockRef = useRef<HTMLDivElement | null>(null);
+  const agentPlusRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLElement | null>(null);
   const timerBubbleRef = useRef<HTMLElement | null>(null);
   const prevEmojiRef = useRef(getCharacterEmoji(initialTdState.memoCount));
@@ -319,6 +330,9 @@ useEffect(() => {
       if (clockRef.current && !clockRef.current.contains(target)) {
         setClockOpen(false);
       }
+      if (agentPlusRef.current && !agentPlusRef.current.contains(target)) {
+        setAgentMenuOpen(false);
+      }
     }
 
     window.addEventListener("mousedown", handleOutsideClick);
@@ -339,6 +353,56 @@ useEffect(() => {
 
   function showTimerNotice(nextMessage: string) {
     setTimerNotice({ id: Date.now(), message: nextMessage });
+  }
+
+  async function submitAgentUiAsk() {
+    const prompt = agentInput.trim();
+    if (!prompt || agentSending) return;
+
+    setAgentError(null);
+    setAgentMenuOpen(false);
+    setAgentMessages((current) => [...current, { role: "user", text: prompt }]);
+    setAgentInput("");
+    setAgentSending(true);
+
+    let screenshotDataUrl: string | undefined;
+    if (agentWithScreenshot) {
+      try {
+        screenshotDataUrl = await captureScreenshotDataUrl();
+      } catch (error: unknown) {
+        const detail = error instanceof Error ? error.message : String(error);
+        setAgentError(`スクリーンショット取得失敗: ${detail}`);
+        setAgentSending(false);
+        return;
+      }
+    }
+
+    try {
+      const response = await fetch(`${apiBase}/api/ai/ask-with-screenshot`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          message: prompt,
+          screenshotDataUrl,
+          user: user.trim() || "thought-drop-user",
+        }),
+      });
+      const data = (await response.json().catch(() => ({}))) as { answer?: string; error?: string; detail?: unknown };
+      if (!response.ok) {
+        const detail = data.error ?? `API failed: ${response.status}`;
+        const extra = data.detail ? ` (${JSON.stringify(data.detail)})` : "";
+        throw new Error(`${detail}${extra}`);
+      }
+      const answer = typeof data.answer === "string" && data.answer.trim()
+        ? data.answer.trim()
+        : "回答を取得できませんでした。";
+      setAgentMessages((current) => [...current, { role: "assistant", text: answer }]);
+    } catch (error: unknown) {
+      const detail = error instanceof Error ? error.message : String(error);
+      setAgentError(detail);
+    } finally {
+      setAgentSending(false);
+    }
   }
 
   useEffect(() => {
@@ -964,7 +1028,75 @@ useEffect(() => {
             ) : null}
           </>
         ) : (
-          <section className="agent-screen" aria-label="agent mode blank screen" />
+          <section className="agent-screen" aria-label="agent mode blank screen">
+            <div className="agent-canvas">
+              {agentMessages.length === 0 ? (
+                <p className="agent-ui-note">Agentモード: 下の入力欄から質問してください。</p>
+              ) : (
+                <div className="agent-messages">
+                  {agentMessages.map((item, index) => (
+                    <div key={`${item.role}-${index}`} className={`agent-message ${item.role}`}>
+                      {item.text}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {agentError ? <p className="agent-error">{agentError}</p> : null}
+            </div>
+            <div className="agent-composer">
+              <div className="agent-plus-wrap" ref={agentPlusRef}>
+                <button
+                  className="agent-plus"
+                  onClick={() => setAgentMenuOpen((current) => !current)}
+                  type="button"
+                >
+                  +
+                </button>
+                {agentMenuOpen ? (
+                  <div className="agent-plus-menu">
+                    <button
+                      onClick={() => {
+                        setAgentWithScreenshot(false);
+                        setAgentMenuOpen(false);
+                      }}
+                      type="button"
+                    >
+                      Ask only
+                    </button>
+                    <button
+                      onClick={() => {
+                        setAgentWithScreenshot(true);
+                        setAgentMenuOpen(false);
+                      }}
+                      type="button"
+                    >
+                      Ask with Screenshot
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+              <input
+                className="agent-input"
+                onChange={(event) => setAgentInput(event.currentTarget.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void submitAgentUiAsk();
+                  }
+                }}
+                placeholder={agentWithScreenshot ? "スクショ付きで質問..." : "質問する..."}
+                value={agentInput}
+              />
+              <button
+                className="agent-ask"
+                disabled={!agentInput.trim() || agentSending}
+                onClick={() => void submitAgentUiAsk()}
+                type="button"
+              >
+                {agentSending ? "Asking..." : agentWithScreenshot ? "Ask + Shot" : "Ask"}
+              </button>
+            </div>
+          </section>
         )}
       </section>
     </main>

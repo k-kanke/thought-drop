@@ -1,6 +1,7 @@
 import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import fs from 'fs';
+import crypto from 'crypto';
 
 const DEFAULT_AWS_REGION = 'ap-northeast-1';
 const DEFAULT_S3_PREFIX = 'uploads/';
@@ -38,6 +39,16 @@ function buildKey(filename: string, createdAtIso: string, memoId: number): strin
   return `${normalizedPrefix}${year}/${month}/memo_${memoId}/${filename}`;
 }
 
+function buildAgentAskKey(createdAtIso: string, extension: string): string {
+  const { prefix } = getEnv();
+  const d = new Date(createdAtIso);
+  const year = d.getUTCFullYear();
+  const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const normalizedPrefix = normalizePrefix(prefix);
+  const token = crypto.randomUUID().replace(/-/g, '').slice(0, 12);
+  return `${normalizedPrefix}${year}/${month}/agent_ask/${d.getTime()}_${token}.${extension}`;
+}
+
 function buildPublicObjectUrl(bucket: string, region: string, key: string): string {
   return `https://${bucket}.s3.${region}.amazonaws.com/${key}`;
 }
@@ -72,6 +83,34 @@ export async function uploadLocalFileToS3(params: {
       Bucket: bucket,
       Key: key,
       Body: body,
+      ContentType: params.mimeType,
+    }),
+  );
+
+  return {
+    bucket,
+    key,
+    url: buildPublicObjectUrl(bucket, region, key),
+  };
+}
+
+export async function uploadBufferToS3(params: {
+  buffer: Buffer;
+  mimeType: string;
+  extension: string;
+  createdAtIso: string;
+}): Promise<UploadResult> {
+  const { bucket, region } = getEnv();
+  if (!bucket) {
+    throw new Error('S3_BUCKET is not set');
+  }
+
+  const key = buildAgentAskKey(params.createdAtIso, params.extension);
+  await getClient(region).send(
+    new PutObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      Body: params.buffer,
       ContentType: params.mimeType,
     }),
   );

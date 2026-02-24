@@ -739,6 +739,141 @@ textarea {
   border-radius: 16px;
   border: 1px dashed #c9d9ef;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.76), rgba(235, 245, 255, 0.56));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.agent-canvas {
+  flex: 1;
+  padding: 10px;
+  overflow: auto;
+}
+
+.agent-ui-note {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: #2a4b73;
+}
+
+.agent-messages {
+  display: grid;
+  gap: 8px;
+}
+
+.agent-message {
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+.agent-message.user {
+  background: #edf4ff;
+  color: #27456e;
+}
+
+.agent-message.assistant {
+  background: #ffffff;
+  border: 1px solid #d9e5f6;
+  color: #1f3554;
+}
+
+.agent-error {
+  margin: 8px 0 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: #b42346;
+}
+
+.agent-composer {
+  border-top: 1px solid #d7e4f6;
+  background: rgba(255, 255, 255, 0.88);
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.agent-plus-wrap {
+  position: relative;
+}
+
+.agent-plus {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  border: 1px solid #c4d5eb;
+  background: #f5f9ff;
+  color: #23416a;
+  font-family: inherit;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.agent-plus-menu {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 6px);
+  min-width: 168px;
+  border: 1px solid #c9daef;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 10px 20px rgba(20, 47, 74, 0.16);
+  padding: 6px;
+  display: grid;
+  gap: 4px;
+  z-index: 35;
+}
+
+.agent-plus-menu button {
+  border: 0;
+  border-radius: 8px;
+  background: #f4f9ff;
+  color: #27456e;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: left;
+  padding: 7px 8px;
+  cursor: pointer;
+}
+
+.agent-plus-menu button:hover {
+  background: #e9f2ff;
+}
+
+.agent-input {
+  flex: 1;
+  height: 32px;
+  border-radius: 10px;
+  border: 1px solid #c4d5eb;
+  padding: 0 10px;
+  box-sizing: border-box;
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.agent-ask {
+  height: 32px;
+  border: 0;
+  border-radius: 10px;
+  padding: 0 12px;
+  background: linear-gradient(140deg, #1f6fff, #3fbcff);
+  color: #fff;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.agent-ask:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 @keyframes bob {
