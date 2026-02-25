@@ -15,12 +15,6 @@ const DEFAULT_POMODORO_FOCUS_MIN = 25;
 const DEFAULT_POMODORO_SHORT_BREAK_MIN = 5;
 const DEFAULT_POMODORO_LONG_BREAK_MIN = 15;
 const DEFAULT_POMODORO_LONG_BREAK_EVERY = 4;
-// 退化のチェック間隔（ms）
-const DECAY_CHECK_INTERVAL_MS = 60_000; // 1分ごとにチェック
-
-// 放置時間と退化レベルのしきい値（分）
-// 例: 60分で1段階, 120分で2段階, 240分で3段階
-const DECAY_LEVEL_THRESHOLDS_MIN = [1, 120, 240];
 
 type TimeMode = "stopwatch" | "timer" | "pomodoro";
 type PomodoroPhase = "focus" | "shortBreak" | "longBreak";
@@ -42,10 +36,10 @@ type TdState = {
 };
 
 const CHARACTER_STAGES: { threshold: number; emoji: string }[] = [
-  { threshold: 30, emoji: "🐔" },
-  { threshold: 10, emoji: "🐥" },
-  { threshold: 1, emoji: "🐣" },
-  { threshold: 0, emoji: "🥚" },
+  { threshold: 90, emoji: "🐔" },
+  { threshold: 30, emoji: "🐥" },
+  { threshold: 15, emoji: "🐣" },
+  { threshold: 0,  emoji: "🥚" },
 ];
 
 
@@ -204,11 +198,33 @@ function App() {
   const agentPlusRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLElement | null>(null);
   const timerBubbleRef = useRef<HTMLElement | null>(null);
-  const prevEmojiRef = useRef(getCharacterEmoji(initialTdState.memoCount));
+  // サーバーから取得したキャラクター情報
+  const [characterPoints, setCharacterPoints] = useState(0);
+  const [characterHunger, setCharacterHunger] = useState(0);
+  // hunger_level をもとに退化レベルを計算（ローカルタイマー不要）
+  const decayLevel = characterHunger >= 75 ? 2 : characterHunger >= 40 ? 1 : 0;
+  const prevEmojiRef = useRef(getCharacterEmoji(0));
   const evolutionTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const [evolutionToast, setEvolutionToast] = useState(false);
   const [isEvolving, setIsEvolving] = useState(false);
-  const [decayLevel, setDecayLevel] = useState(0); // 0=退化なし, 1〜で段階的に退化
+
+  // キャラクター情報を定期取得（web側で進化・空腹変化した場合も反映するため）
+  useEffect(() => {
+    async function fetchCharacter() {
+      try {
+        const res = await fetch(`${apiBase}/api/character`);
+        if (!res.ok) return;
+        const data = (await res.json()) as { points: number; hunger_level: number };
+        setCharacterPoints(data.points);
+        setCharacterHunger(data.hunger_level);
+      } catch {
+        // 取得失敗してもアプリは続行
+      }
+    }
+    void fetchCharacter();
+    const id = window.setInterval(() => void fetchCharacter(), 30_000);
+    return () => window.clearInterval(id);
+  }, [apiBase]);
 
   async function resizeWindow() {
     try {
@@ -267,29 +283,6 @@ function App() {
     return () => window.cancelAnimationFrame(id);
   }, [timerNotice, isOpen]);
 
-useEffect(() => {
-  function updateDecayLevel() {
-    const now = Date.now();
-    const idleMinutes = (now - lastSentAtMs) / (60 * 1000);
-
-    let level = 0;
-    if (idleMinutes >= DECAY_LEVEL_THRESHOLDS_MIN[2]) {
-      level = 3;
-    } else if (idleMinutes >= DECAY_LEVEL_THRESHOLDS_MIN[1]) {
-      level = 2;
-    } else if (idleMinutes >= DECAY_LEVEL_THRESHOLDS_MIN[0]) {
-      level = 1;
-    } else {
-      level = 0;
-    }
-
-    setDecayLevel(level);
-  }
-
-  updateDecayLevel(); // マウント時にも一回計算
-  const id = window.setInterval(updateDecayLevel, DECAY_CHECK_INTERVAL_MS);
-  return () => window.clearInterval(id);
-}, [lastSentAtMs]);
 
   useEffect(() => {
     localStorage.setItem(
@@ -476,7 +469,7 @@ useEffect(() => {
   ]);
 
   useEffect(() => {
-    const currentEmoji = getCharacterEmoji(memoCount);
+    const currentEmoji = getCharacterEmoji(characterPoints);
     if (currentEmoji !== prevEmojiRef.current) {
       prevEmojiRef.current = currentEmoji;
       if (evolutionTimerRef.current !== null) window.clearTimeout(evolutionTimerRef.current);
@@ -485,7 +478,7 @@ useEffect(() => {
       window.setTimeout(() => setIsEvolving(false), 600);
       evolutionTimerRef.current = window.setTimeout(() => setEvolutionToast(false), 2500);
     }
-  }, [memoCount]);
+  }, [characterPoints]);
 
   function startTime() {
     const now = Date.now();
@@ -687,8 +680,16 @@ useEffect(() => {
         setLastSentAtMs(now);
         setSnoozeUntilMs(null);
         setReminderVisible(false);
-        setMemoCount((c) => c + 1);
-        setDecayLevel(0);
+        // メモ保存後にサーバーからポイント・空腹度を再取得して絵文字を更新
+        fetch(`${apiBase}/api/character`)
+          .then((r) => r.ok ? r.json() : null)
+          .then((data: { points: number; hunger_level: number } | null) => {
+            if (data) {
+              setCharacterPoints(data.points);
+              setCharacterHunger(data.hunger_level);
+            }
+          })
+          .catch(() => undefined);
         if (withScreenshot) {
           setMessage(result.screenshot_url ? "メモとスクリーンショットを保存しました" : "メモは保存しました");
         } else {
@@ -715,10 +716,10 @@ useEffect(() => {
           onPointerUp={handleCharacterPointerUp}
           type="button"
         >
-          <span className="character-face">{getCharacterEmojiWithDecay(memoCount, decayLevel)}</span>
+          <span className="character-face">{getCharacterEmojiWithDecay(characterPoints, decayLevel)}</span>
         </button>
         {evolutionToast ? (
-          <div className="evolution-toast">✨ 進化した！ {getCharacterEmoji(memoCount)}</div>
+          <div className="evolution-toast">✨ 進化した！ {getCharacterEmoji(characterPoints)}</div>
         ) : null}
         {timerNotice ? (
           <aside className="timer-bubble" key={timerNotice.id} ref={timerBubbleRef}>

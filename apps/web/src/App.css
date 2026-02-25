@@ -22,17 +22,21 @@
 
 h1 {
   margin: 0;
-  font-size: 30px;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
 h2 {
   margin: 0 0 8px;
-  font-size: 16px;
+  font-size: 15px;
+  font-weight: 700;
 }
 
 h3 {
   margin: 0 0 8px;
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 500;
   color: #35556a;
 }
 
@@ -96,6 +100,12 @@ label {
 .character p {
   margin: 6px 0;
   font-size: 13px;
+}
+
+.character p.character-emoji {
+  font-size: 60px;
+  text-align: center;
+  margin: 4px 0 8px;
 }
 
 .items {
@@ -173,9 +183,10 @@ label {
 
 .metric {
   margin: 0;
-  font-size: 34px;
-  font-weight: 800;
+  font-size: 28px;
+  font-weight: 900;
   color: #0d354c;
+  letter-spacing: -0.02em;
 }
 
 .row {
