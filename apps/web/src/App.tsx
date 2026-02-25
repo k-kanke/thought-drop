@@ -60,6 +60,18 @@ type ModeFilter = 'all' | 'instant' | 'stockpile'
 
 const STATUS_OPTIONS = ['集中', '調査中', '詰まり', 'レビュー待ち']
 
+// デスクトップ側の memoCount 閾値（0/5/10/30）に合わせ、同じ段階で絵文字が変わるようにする
+const CHARACTER_STAGES = [
+  { threshold: 90, emoji: '🐔' },
+  { threshold: 30, emoji: '🐥' },
+  { threshold: 15, emoji: '🐣' },
+  { threshold: 0,  emoji: '🥚' },
+] as const
+
+function getCharacterEmoji(points: number): string {
+  return CHARACTER_STAGES.find((s) => points >= s.threshold)?.emoji ?? '🥚'
+}
+
 function formatDateTime(value: string): string {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
@@ -251,16 +263,17 @@ function App() {
       <section className="layout">
         <aside className="sidebar">
           <article className="panel">
-            <h2>Character</h2>
+            <h2>キャラクター</h2>
             {character ? (
               <div className="character">
+                <p className="character-emoji">{getCharacterEmoji(character.points)}</p>
                 <p>Lv.{character.level} / {character.evolution_path}</p>
-                <p>Point: {character.points}</p>
-                <p>Hunger: {character.hunger_level}</p>
-                <p>Mood: {character.mood}</p>
+                <p>ポイント: {character.points}</p>
+                <p>空腹度: {character.hunger_level}</p>
+                <p>気分: {character.mood}</p>
                 <div className="row">
-                  <button type="button" className="ghost" onClick={() => void evolve('backend')}>Backend</button>
-                  <button type="button" className="ghost" onClick={() => void evolve('infrastructure')}>Infra</button>
+                  <button type="button" className="ghost" onClick={() => void evolve('backend')}>バックエンド</button>
+                  <button type="button" className="ghost" onClick={() => void evolve('infrastructure')}>インフラ</button>
                 </div>
                 <ul className="items">
                   {character.items.map((item) => (
@@ -274,7 +287,7 @@ function App() {
           </article>
 
           <article className="panel">
-            <h2>Tags</h2>
+            <h2>タグ</h2>
             <div className="tag-list">
               {tags.slice(0, 20).map((tag) => (
                 <button
@@ -290,26 +303,26 @@ function App() {
           </article>
 
           <article className="panel">
-            <h2>Settings</h2>
+            <h2>設定</h2>
             <label>
-              From
+              開始日
               <input type="date" value={fromDate} onChange={(event) => setFromDate(event.currentTarget.value)} />
             </label>
             <label>
-              To
+              終了日
               <input type="date" value={toDate} onChange={(event) => setToDate(event.currentTarget.value)} />
             </label>
             <select value={statusFilter} onChange={(event) => setStatusFilter(event.currentTarget.value)}>
-              <option value="">Status: all</option>
+              <option value="">ステータス: すべて</option>
               {STATUS_OPTIONS.map((status) => <option key={status} value={status}>{status}</option>)}
             </select>
             <select
               value={resolvedFilter}
               onChange={(event) => setResolvedFilter(event.currentTarget.value as ResolvedFilter)}
             >
-              <option value="all">Resolve: all</option>
-              <option value="true">resolved</option>
-              <option value="false">open</option>
+              <option value="all">解決: すべて</option>
+              <option value="true">解決済み</option>
+              <option value="false">未対応</option>
             </select>
           </article>
         </aside>
@@ -347,8 +360,8 @@ function App() {
             <div className="row header-row">
               <h2>ナレッジ・タイムライン</h2>
               <div className="row">
-                <button type="button" className={timelineView === 'list' ? 'active' : 'ghost'} onClick={() => setTimelineView('list')}>List</button>
-                <button type="button" className={timelineView === 'calendar' ? 'active' : 'ghost'} onClick={() => setTimelineView('calendar')}>Calendar</button>
+                <button type="button" className={timelineView === 'list' ? 'active' : 'ghost'} onClick={() => setTimelineView('list')}>リスト</button>
+                <button type="button" className={timelineView === 'calendar' ? 'active' : 'ghost'} onClick={() => setTimelineView('calendar')}>カレンダー</button>
               </div>
             </div>
 
@@ -369,11 +382,11 @@ function App() {
                         className={memo.resolved === 1 ? 'ok' : 'warn'}
                         onClick={() => void toggleResolved(memo)}
                       >
-                        {memo.resolved === 1 ? 'resolved' : 'open'}
+                        {memo.resolved === 1 ? '解決済み' : '未対応'}
                       </button>
                       {memo.screenshot_url ? (
                         <button type="button" className="ghost" onClick={() => void openScreenshot(memo.id)}>
-                          screenshot
+                          スクリーンショット
                         </button>
                       ) : null}
                     </div>
@@ -399,7 +412,7 @@ function App() {
             <form className="draft-form" onSubmit={(event) => void generateDraft(event)}>
               <input value={blogTitle} onChange={(event) => setBlogTitle(event.currentTarget.value)} placeholder="タイトル" />
               <select value={blogMode} onChange={(event) => setBlogMode(event.currentTarget.value as ModeFilter)}>
-                <option value="all">Mode: all</option>
+                <option value="all">モード: すべて</option>
                 <option value="stockpile">ためるモード</option>
                 <option value="instant">即時モード</option>
               </select>
