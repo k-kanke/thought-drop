@@ -19,13 +19,13 @@
 
 html {
   margin: 0;
-  background: transparent;
+  background: #f0f4fa;
   overflow: hidden;
 }
 
 body {
   margin: 0;
-  background: transparent;
+  background: #f0f4fa;
   overflow: hidden;
 }
 
@@ -75,18 +75,27 @@ body {
   outline: none;
   display: grid;
   place-items: center;
-  overflow: hidden;
+  overflow: visible;
   cursor: pointer;
   background:
     radial-gradient(circle at 30% 25%, #fff6d4 0%, #ffd661 54%, #ffaf3f 100%);
   box-shadow:
     inset 0 -2px 0 rgba(121, 65, 9, 0.25),
     0 10px 24px rgba(24, 44, 66, 0.3);
-  animation: bob 2.8s ease-in-out infinite;
+  animation: breathe 3.2s ease-in-out infinite;
+  transition: box-shadow 0.4s ease;
+  position: relative;
 }
 
+/* --- ホバー: ぷるぷる震える --- */
 .character:hover {
-  transform: scale(1.03);
+  animation: wiggle 0.4s ease-in-out infinite;
+}
+
+/* --- クリック（active）: ぎゅっと潰れる --- */
+.character:active {
+  animation: none;
+  transform: scale(0.88) translateY(2px);
 }
 
 .character:focus-visible {
@@ -96,9 +105,62 @@ body {
     0 10px 24px rgba(24, 44, 66, 0.3);
 }
 
+/* --- ステータス別オーラ --- */
+.character.status-focused {
+  box-shadow:
+    inset 0 -2px 0 rgba(121, 65, 9, 0.25),
+    0 10px 24px rgba(24, 44, 66, 0.3),
+    0 0 16px 4px rgba(31, 111, 255, 0.25);
+}
+
+.character.status-investigating {
+  box-shadow:
+    inset 0 -2px 0 rgba(121, 65, 9, 0.25),
+    0 10px 24px rgba(24, 44, 66, 0.3),
+    0 0 16px 4px rgba(64, 182, 255, 0.3);
+}
+
+.character.status-stuck {
+  box-shadow:
+    inset 0 -2px 0 rgba(121, 65, 9, 0.25),
+    0 10px 24px rgba(24, 44, 66, 0.3),
+    0 0 16px 4px rgba(255, 107, 53, 0.35);
+}
+
+.character.status-review {
+  box-shadow:
+    inset 0 -2px 0 rgba(121, 65, 9, 0.25),
+    0 10px 24px rgba(24, 44, 66, 0.3),
+    0 0 16px 4px rgba(160, 100, 255, 0.3);
+}
+
 .character-face {
   font-size: 34px;
   line-height: 1;
+  transition: transform 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* --- 送信成功: ぴょん＋キラキラ --- */
+.character.sent-success {
+  animation: jump-joy 0.6s ease;
+}
+
+.character.sent-success::after {
+  content: "✨";
+  position: absolute;
+  top: -8px;
+  right: -6px;
+  font-size: 18px;
+  animation: sparkle-fade 0.8s ease forwards;
+  pointer-events: none;
+}
+
+/* --- リマインダー: 注意をひく揺れ --- */
+.character.reminding {
+  animation: nudge 1.2s ease-in-out infinite;
 }
 
 .reminder-bubble {
@@ -876,14 +938,53 @@ textarea {
   cursor: not-allowed;
 }
 
-@keyframes bob {
-  0%,
-  100% {
-    transform: translateY(0);
+/* === アイドル: 呼吸のような拡縮＋ふわふわ === */
+@keyframes breathe {
+  0%, 100% {
+    transform: translateY(0) scale(1);
   }
-  50% {
-    transform: translateY(-3px);
+  30% {
+    transform: translateY(-3px) scale(1.03);
   }
+  60% {
+    transform: translateY(-1px) scale(0.98);
+  }
+}
+
+/* === ホバー: ぷるぷる === */
+@keyframes wiggle {
+  0%, 100% { transform: rotate(0deg); }
+  20% { transform: rotate(-5deg); }
+  40% { transform: rotate(5deg); }
+  60% { transform: rotate(-3deg); }
+  80% { transform: rotate(3deg); }
+}
+
+/* === 送信成功: ぴょんと跳ねて喜ぶ === */
+@keyframes jump-joy {
+  0% { transform: translateY(0) scale(1); }
+  20% { transform: translateY(-16px) scale(1.08); }
+  40% { transform: translateY(0) scale(0.92); }
+  55% { transform: translateY(-6px) scale(1.04); }
+  70% { transform: translateY(0) scale(0.97); }
+  85% { transform: translateY(-2px) scale(1.01); }
+  100% { transform: translateY(0) scale(1); }
+}
+
+/* === キラキラが消える === */
+@keyframes sparkle-fade {
+  0% { opacity: 1; transform: scale(0.5) translateY(0); }
+  50% { opacity: 1; transform: scale(1.2) translateY(-6px); }
+  100% { opacity: 0; transform: scale(0.8) translateY(-14px); }
+}
+
+/* === リマインダー: とんとん叩く感じ === */
+@keyframes nudge {
+  0%, 100% { transform: translateX(0) rotate(0deg); }
+  15% { transform: translateX(-3px) rotate(-4deg); }
+  30% { transform: translateX(3px) rotate(4deg); }
+  45% { transform: translateX(-2px) rotate(-2deg); }
+  60% { transform: translateX(0) rotate(0deg); }
 }
 
 @keyframes evolve-pop {
@@ -932,4 +1033,49 @@ textarea {
     opacity: 1;
     transform: translateY(0) scale(1);
   }
+}
+
+/* === プレビュー用ステージ切り替え === */
+.preview-switcher {
+  position: absolute;
+  bottom: -56px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  white-space: nowrap;
+  align-items: center;
+}
+
+.preview-row {
+  display: flex;
+  gap: 3px;
+}
+
+.preview-btn {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border: 1px solid #d4e0ef;
+  border-radius: 6px;
+  background: #fff;
+  padding: 2px 5px;
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: 600;
+  color: #566685;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.preview-btn:hover {
+  background: #edf4ff;
+  border-color: #9dbce8;
+}
+
+.preview-btn.active {
+  background: linear-gradient(130deg, var(--accent), var(--accent-2));
+  border-color: transparent;
+  color: #fff;
 }
