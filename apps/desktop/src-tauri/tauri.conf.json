@@ -17,9 +17,9 @@
         "width": 132,
         "height": 132,
         "decorations": false,
-        "transparent": false,
-        "resizable": false,
-        "shadow": true
+        "transparent": true,
+        "resizable": true,
+        "shadow": false
       }
     ],
     "security": {

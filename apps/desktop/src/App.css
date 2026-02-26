@@ -51,6 +51,7 @@ body {
 
 .app.collapsed.with-reminder {
   justify-content: flex-start;
+  align-items: flex-start;
   padding: 10px;
 }
 
@@ -178,14 +179,18 @@ body {
 .timer-bubble {
   position: absolute;
   left: calc(100% + 10px);
-  top: 4px;
-  width: 140px;
+  top: auto;
+  bottom: 0;
+  width: 184px;
   border-radius: 14px;
   background: #ffffff;
   border: 1px solid #d4e0ef;
   box-shadow: 0 10px 22px rgba(16, 38, 61, 0.2);
-  padding: 10px;
+  padding: 8px 10px;
   z-index: 31;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .reminder-bubble::before {
@@ -205,7 +210,8 @@ body {
   content: "";
   position: absolute;
   left: -8px;
-  top: 14px;
+  top: auto;
+  bottom: 14px;
   width: 12px;
   height: 12px;
   transform: rotate(45deg);
@@ -228,6 +234,20 @@ body {
   font-weight: 700;
   color: #233654;
   line-height: 1.35;
+  flex: 1;
+}
+
+.timer-ok {
+  border: 1px solid #c4d5eb;
+  border-radius: 8px;
+  background: #f5f9ff;
+  color: #23416a;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 8px;
+  cursor: pointer;
+  flex-shrink: 0;
 }
 
 .reminder-actions {
@@ -283,7 +303,7 @@ body {
 
 .title-row {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 10px;
 }
@@ -292,6 +312,34 @@ body {
   display: flex;
   align-items: center;
   -webkit-app-region: no-drag;
+}
+
+.agent-switch {
+  border: 1px solid #c5d9f1;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.88);
+  color: #27456e;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  height: 32px;
+  padding: 0 10px 0 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.agent-switch.active {
+  border-color: transparent;
+  background: linear-gradient(130deg, var(--accent), var(--accent-2));
+  color: #fff;
+}
+
+.agent-switch-icon {
+  font-size: 14px;
+  line-height: 1;
 }
 
 .drag-handle {
@@ -456,7 +504,7 @@ textarea {
 }
 
 .clock-pill.active {
-  width: 96px;
+  width: 138px;
   background: linear-gradient(180deg, #f8fbff, #e8f1ff);
   border-color: #9dbce8;
 }
@@ -510,6 +558,7 @@ textarea {
 .clock-time {
   letter-spacing: 0;
   margin-left: 0;
+  font-size: 11px;
 }
 
 .clock-icon {
@@ -551,7 +600,7 @@ textarea {
   position: absolute;
   top: calc(100% + 6px);
   right: 0;
-  width: 162px;
+  width: 224px;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.98);
@@ -562,7 +611,7 @@ textarea {
 
 .clock-mode-buttons {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: 6px;
 }
 
@@ -644,10 +693,58 @@ textarea {
   text-align: center;
 }
 
+.pomodoro-meta {
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px solid #d7e4f6;
+  border-radius: 8px;
+  background: #f7fbff;
+}
+
+.pomodoro-meta p {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: #33547c;
+  line-height: 1.35;
+}
+
+.pomodoro-meta p + p {
+  margin-top: 3px;
+}
+
+.pomodoro-inputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.pomodoro-inputs label {
+  margin: 0;
+  color: #36557c;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.pomodoro-inputs input {
+  width: 36px;
+  height: 24px;
+  border-radius: 8px;
+  border: 1px solid #c4d5eb;
+  padding: 0 4px;
+  font-size: 11px;
+  text-align: center;
+}
+
 .panel-footer {
   margin-top: 8px;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 8px;
 }
 
@@ -658,7 +755,6 @@ textarea {
 }
 
 .send {
-  margin-left: auto;
   border: 0;
   border-radius: 12px;
   padding: 10px 16px;
@@ -673,6 +769,11 @@ textarea {
 
 .send:hover {
   transform: translateY(-1px);
+}
+
+.send.secondary {
+  background: linear-gradient(140deg, #8aa2c8, #6f8cb8);
+  box-shadow: 0 10px 20px rgba(66, 93, 136, 0.24);
 }
 
 .send:disabled {
@@ -692,6 +793,149 @@ textarea {
 
 .message.error {
   color: var(--danger);
+}
+
+.agent-screen {
+  margin-top: 8px;
+  height: 282px;
+  border-radius: 16px;
+  border: 1px dashed #c9d9ef;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.76), rgba(235, 245, 255, 0.56));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.agent-canvas {
+  flex: 1;
+  padding: 10px;
+  overflow: auto;
+}
+
+.agent-ui-note {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: #2a4b73;
+}
+
+.agent-messages {
+  display: grid;
+  gap: 8px;
+}
+
+.agent-message {
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+.agent-message.user {
+  background: #edf4ff;
+  color: #27456e;
+}
+
+.agent-message.assistant {
+  background: #ffffff;
+  border: 1px solid #d9e5f6;
+  color: #1f3554;
+}
+
+.agent-error {
+  margin: 8px 0 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: #b42346;
+}
+
+.agent-composer {
+  border-top: 1px solid #d7e4f6;
+  background: rgba(255, 255, 255, 0.88);
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.agent-plus-wrap {
+  position: relative;
+}
+
+.agent-plus {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  border: 1px solid #c4d5eb;
+  background: #f5f9ff;
+  color: #23416a;
+  font-family: inherit;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.agent-plus-menu {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 6px);
+  min-width: 168px;
+  border: 1px solid #c9daef;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 10px 20px rgba(20, 47, 74, 0.16);
+  padding: 6px;
+  display: grid;
+  gap: 4px;
+  z-index: 35;
+}
+
+.agent-plus-menu button {
+  border: 0;
+  border-radius: 8px;
+  background: #f4f9ff;
+  color: #27456e;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: left;
+  padding: 7px 8px;
+  cursor: pointer;
+}
+
+.agent-plus-menu button:hover {
+  background: #e9f2ff;
+}
+
+.agent-input {
+  flex: 1;
+  height: 32px;
+  border-radius: 10px;
+  border: 1px solid #c4d5eb;
+  padding: 0 10px;
+  box-sizing: border-box;
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.agent-ask {
+  height: 32px;
+  border: 0;
+  border-radius: 10px;
+  padding: 0 12px;
+  background: linear-gradient(140deg, #1f6fff, #3fbcff);
+  color: #fff;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.agent-ask:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 /* === アイドル: 呼吸のような拡縮＋ふわふわ === */

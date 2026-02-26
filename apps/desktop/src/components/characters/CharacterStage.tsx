@@ -41,8 +41,12 @@ export function CharacterStage({
   size,
   className,
   variant = 1,
-}: { count: number } & CharacterSVGProps) {
-  const stageId = getCharacterStageId(count);
+  decayLevel = 0,
+}: { count: number; decayLevel?: number } & CharacterSVGProps) {
+  const baseIndex = CHARACTER_STAGES.findIndex((s) => count >= s.threshold);
+  const idx = baseIndex === -1 ? CHARACTER_STAGES.length - 1 : baseIndex;
+  const decayedIndex = Math.min(CHARACTER_STAGES.length - 1, idx + decayLevel);
+  const stageId = CHARACTER_STAGES[decayedIndex].id;
   const Component = SVG_MAP[stageId];
   return <Component size={size} className={className} variant={variant} />;
 }

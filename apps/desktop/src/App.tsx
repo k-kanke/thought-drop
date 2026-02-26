@@ -1,4 +1,5 @@
 import { type PointerEvent, useEffect, useMemo, useRef, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { LogicalSize, getCurrentWindow } from "@tauri-apps/api/window";
 import { CharacterStage, getCharacterEmoji, getCharacterStageId } from "./components/characters";
 import "./App.css";
@@ -11,8 +12,22 @@ const DEFAULT_REMIND_AFTER_MIN = 1;
 const DEFAULT_SNOOZE_MIN = 30;
 const DEFAULT_TIMER_HOURS = 0;
 const DEFAULT_TIMER_MINUTES = 5;
+const DEFAULT_POMODORO_FOCUS_MIN = 25;
+const DEFAULT_POMODORO_SHORT_BREAK_MIN = 5;
+const DEFAULT_POMODORO_LONG_BREAK_MIN = 15;
+const DEFAULT_POMODORO_LONG_BREAK_EVERY = 4;
 
-type TimeMode = "stopwatch" | "timer";
+type TimeMode = "stopwatch" | "timer" | "pomodoro";
+type PomodoroPhase = "focus" | "shortBreak" | "longBreak";
+type TimerNotice = {
+  id: number;
+  message: string;
+};
+type PanelMode = "memo" | "agent";
+type AgentMessage = {
+  role: "user" | "assistant";
+  text: string;
+};
 
 type TdState = {
   lastSentAtMs: number;
@@ -33,6 +48,8 @@ const COLLAPSED_WIDTH = 132;
 const COLLAPSED_HEIGHT = 132;
 const REMINDER_WIDTH = 290;
 const REMINDER_HEIGHT = 132;
+const NOTICE_SAFE_WIDTH = 420;
+const NOTICE_SAFE_HEIGHT = 340;
 const OPEN_MIN_WIDTH = 460;
 const OPEN_MIN_HEIGHT = 440;
 const OPEN_PADDING = 10;
@@ -93,6 +110,21 @@ function parseTimerInput(value: string, max: number): number {
   return Math.min(max, Math.floor(numericValue));
 }
 
+function getPomodoroPhaseLabel(phase: PomodoroPhase): string {
+  if (phase === "focus") return "Focus";
+  if (phase === "shortBreak") return "Break";
+  return "Long Break";
+}
+
+function getPomodoroDurationMs(
+  phase: PomodoroPhase,
+  config: { focusMin: number; shortBreakMin: number; longBreakMin: number },
+): number {
+  if (phase === "focus") return config.focusMin * 60 * 1000;
+  if (phase === "shortBreak") return config.shortBreakMin * 60 * 1000;
+  return config.longBreakMin * 60 * 1000;
+}
+
 function App() {
   const apiBase = useMemo(
     () => (import.meta.env.VITE_API_BASE_URL as string) || "http://127.0.0.1:3001",
@@ -103,10 +135,17 @@ function App() {
   const [text, setText] = useState("");
   const [status, setStatus] = useState<Status>("集中");
   const [statusOpen, setStatusOpen] = useState(false);
+  const [panelMode, setPanelMode] = useState<PanelMode>("memo");
+  const [agentInput, setAgentInput] = useState("");
+  const [agentMenuOpen, setAgentMenuOpen] = useState(false);
+  const [agentWithScreenshot, setAgentWithScreenshot] = useState(false);
+  const [agentMessages, setAgentMessages] = useState<AgentMessage[]>([]);
+  const [agentSending, setAgentSending] = useState(false);
+  const [agentError, setAgentError] = useState<string | null>(null);
   const [lastSentAtMs, setLastSentAtMs] = useState(initialTdState.lastSentAtMs);
   const [remindAfterMin, setRemindAfterMin] = useState(initialTdState.remindAfterMin);
   const [snoozeUntilMs, setSnoozeUntilMs] = useState<number | null>(initialTdState.snoozeUntilMs);
-  const [memoCount, setMemoCount] = useState(initialTdState.memoCount);
+  const [memoCount] = useState(initialTdState.memoCount);
   const [reminderVisible, setReminderVisible] = useState(false);
   const [user, setUser] = useState("teamK");
   const [sending, setSending] = useState(false);
@@ -119,26 +158,76 @@ function App() {
   const [elapsedBeforePauseMs, setElapsedBeforePauseMs] = useState(0);
   const [activeTimerDurationMs, setActiveTimerDurationMs] = useState(0);
   const [timeDisplayMs, setTimeDisplayMs] = useState(0);
-  const [timerNoticeVisible, setTimerNoticeVisible] = useState(false);
+  const [timerNotice, setTimerNotice] = useState<TimerNotice | null>(null);
+  const [pomodoroPhase, setPomodoroPhase] = useState<PomodoroPhase | null>(null);
+  const [pomodoroCompletedFocusCount, setPomodoroCompletedFocusCount] = useState(0);
   const [timerHoursInput, setTimerHoursInput] = useState(formatTwoDigits(DEFAULT_TIMER_HOURS));
   const [timerMinutesInput, setTimerMinutesInput] = useState(formatTwoDigits(DEFAULT_TIMER_MINUTES));
+  const [pomodoroFocusInput, setPomodoroFocusInput] = useState(String(DEFAULT_POMODORO_FOCUS_MIN));
+  const [pomodoroShortBreakInput, setPomodoroShortBreakInput] = useState(String(DEFAULT_POMODORO_SHORT_BREAK_MIN));
+  const [pomodoroLongBreakInput, setPomodoroLongBreakInput] = useState(String(DEFAULT_POMODORO_LONG_BREAK_MIN));
+  const [pomodoroLongBreakEveryInput, setPomodoroLongBreakEveryInput] = useState(
+    String(DEFAULT_POMODORO_LONG_BREAK_EVERY),
+  );
   const pointerDown = useRef<{ x: number; y: number } | null>(null);
   const dragged = useRef(false);
   const statusRef = useRef<HTMLDivElement | null>(null);
   const clockRef = useRef<HTMLDivElement | null>(null);
+  const agentPlusRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLElement | null>(null);
-  const prevStageRef = useRef(getCharacterStageId(initialTdState.memoCount));
+  const timerBubbleRef = useRef<HTMLElement | null>(null);
+  // サーバーから取得したキャラクター情報
+  const [characterPoints, setCharacterPoints] = useState(0);
+  const [characterHunger, setCharacterHunger] = useState(0);
+  // hunger_level をもとに退化レベルを計算（ローカルタイマー不要）
+  const decayLevel = characterHunger >= 75 ? 2 : characterHunger >= 40 ? 1 : 0;
+  const prevStageRef = useRef(getCharacterStageId(0));
   const evolutionTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const [evolutionToast, setEvolutionToast] = useState(false);
   const [isEvolving, setIsEvolving] = useState(false);
   const [sentSuccess, setSentSuccess] = useState(false);
   const [variant, setVariant] = useState<1 | 2 | 3>(1);
 
+  // キャラクター情報を定期取得（web側で進化・空腹変化した場合も反映するため）
+  useEffect(() => {
+    async function fetchCharacter() {
+      try {
+        const res = await fetch(`${apiBase}/api/character`);
+        if (!res.ok) return;
+        const data = (await res.json()) as { points: number; hunger_level: number };
+        setCharacterPoints(data.points);
+        setCharacterHunger(data.hunger_level);
+      } catch {
+        // 取得失敗してもアプリは続行
+      }
+    }
+    void fetchCharacter();
+    const id = window.setInterval(() => void fetchCharacter(), 30_000);
+    return () => window.clearInterval(id);
+  }, [apiBase]);
+
   async function resizeWindow() {
     try {
       const appWindow = getCurrentWindow();
       if (!isOpen) {
-        if (reminderVisible) {
+        if (timerNotice) {
+          const bubble = timerBubbleRef.current;
+          const bubbleWidth = bubble ? Math.ceil(bubble.scrollWidth) : 184;
+          const bubbleHeight = bubble ? Math.ceil(bubble.scrollHeight) : 90;
+          const bubbleTop = bubble ? Math.ceil(bubble.offsetTop) : 4;
+          const noticeWidth = Math.max(
+            REMINDER_WIDTH,
+            Math.ceil(10 + ICON_SIZE + 10 + bubbleWidth + 20),
+            NOTICE_SAFE_WIDTH,
+          );
+          const noticeHeight = Math.max(
+            REMINDER_HEIGHT,
+            Math.ceil(10 + Math.max(ICON_SIZE, bubbleTop + bubbleHeight) + 20),
+            NOTICE_SAFE_HEIGHT,
+          );
+
+          await appWindow.setSize(new LogicalSize(noticeWidth, noticeHeight));
+        } else if (reminderVisible) {
           await appWindow.setSize(new LogicalSize(REMINDER_WIDTH, REMINDER_HEIGHT));
         } else {
           await appWindow.setSize(new LogicalSize(COLLAPSED_WIDTH, COLLAPSED_HEIGHT));
@@ -164,7 +253,16 @@ function App() {
 
   useEffect(() => {
     void resizeWindow();
-  }, [isOpen, reminderVisible, statusOpen, clockOpen, message, text.length, sending]);
+  }, [isOpen, reminderVisible, timerNotice, statusOpen, clockOpen, message, text.length, sending, panelMode]);
+
+  useEffect(() => {
+    if (!timerNotice || isOpen) return;
+    const id = window.requestAnimationFrame(() => {
+      void resizeWindow();
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [timerNotice, isOpen]);
+
 
   useEffect(() => {
     localStorage.setItem(
@@ -205,11 +303,80 @@ function App() {
       if (clockRef.current && !clockRef.current.contains(target)) {
         setClockOpen(false);
       }
+      if (agentPlusRef.current && !agentPlusRef.current.contains(target)) {
+        setAgentMenuOpen(false);
+      }
     }
 
     window.addEventListener("mousedown", handleOutsideClick);
     return () => window.removeEventListener("mousedown", handleOutsideClick);
   }, []);
+
+  const timerHours = parseTimerInput(timerHoursInput, 99);
+  const timerMinutes = parseTimerInput(timerMinutesInput, 59);
+  const timerDurationMs = (timerHours * 60 * 60 + timerMinutes * 60) * 1000;
+  const pomodoroFocusMin = parseTimerInput(pomodoroFocusInput, 180);
+  const pomodoroShortBreakMin = parseTimerInput(pomodoroShortBreakInput, 60);
+  const pomodoroLongBreakMin = parseTimerInput(pomodoroLongBreakInput, 90);
+  const pomodoroLongBreakEvery = parseTimerInput(pomodoroLongBreakEveryInput, 12);
+  const startTimerDisabled =
+    (selectedTimeMode === "timer" && timerDurationMs <= 0) ||
+    (selectedTimeMode === "pomodoro" &&
+      (pomodoroFocusMin <= 0 || pomodoroShortBreakMin <= 0 || pomodoroLongBreakMin <= 0 || pomodoroLongBreakEvery <= 0));
+
+  function showTimerNotice(nextMessage: string) {
+    setTimerNotice({ id: Date.now(), message: nextMessage });
+  }
+
+  async function submitAgentUiAsk() {
+    const prompt = agentInput.trim();
+    if (!prompt || agentSending) return;
+
+    setAgentError(null);
+    setAgentMenuOpen(false);
+    setAgentMessages((current) => [...current, { role: "user", text: prompt }]);
+    setAgentInput("");
+    setAgentSending(true);
+
+    let screenshotDataUrl: string | undefined;
+    if (agentWithScreenshot) {
+      try {
+        screenshotDataUrl = await captureScreenshotDataUrl();
+      } catch (error: unknown) {
+        const detail = error instanceof Error ? error.message : String(error);
+        setAgentError(`スクリーンショット取得失敗: ${detail}`);
+        setAgentSending(false);
+        return;
+      }
+    }
+
+    try {
+      const response = await fetch(`${apiBase}/api/ai/ask-with-screenshot`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          message: prompt,
+          screenshotDataUrl,
+          user: user.trim() || "thought-drop-user",
+        }),
+      });
+      const data = (await response.json().catch(() => ({}))) as { answer?: string; error?: string; detail?: unknown };
+      if (!response.ok) {
+        const detail = data.error ?? `API failed: ${response.status}`;
+        const extra = data.detail ? ` (${JSON.stringify(data.detail)})` : "";
+        throw new Error(`${detail}${extra}`);
+      }
+      const answer = typeof data.answer === "string" && data.answer.trim()
+        ? data.answer.trim()
+        : "回答を取得できませんでした。";
+      setAgentMessages((current) => [...current, { role: "assistant", text: answer }]);
+    } catch (error: unknown) {
+      const detail = error instanceof Error ? error.message : String(error);
+      setAgentError(detail);
+    } finally {
+      setAgentSending(false);
+    }
+  }
 
   useEffect(() => {
     if (!timeRunning || !timeStartedAtMs || !activeTimeMode) return;
@@ -223,18 +390,66 @@ function App() {
       const remainingMs = Math.max(0, activeTimerDurationMs - elapsedMs);
       setTimeDisplayMs(remainingMs);
       if (remainingMs === 0) {
+        if (activeTimeMode === "pomodoro") {
+          const now = Date.now();
+          if (pomodoroPhase === "focus") {
+            const nextFocusCount = pomodoroCompletedFocusCount + 1;
+            const nextBreakPhase: PomodoroPhase =
+              nextFocusCount % pomodoroLongBreakEvery === 0 ? "longBreak" : "shortBreak";
+            const nextDurationMs = getPomodoroDurationMs(nextBreakPhase, {
+              focusMin: pomodoroFocusMin,
+              shortBreakMin: pomodoroShortBreakMin,
+              longBreakMin: pomodoroLongBreakMin,
+            });
+
+            setPomodoroCompletedFocusCount(nextFocusCount);
+            setPomodoroPhase(nextBreakPhase);
+            setTimeStartedAtMs(now);
+            setElapsedBeforePauseMs(0);
+            setActiveTimerDurationMs(nextDurationMs);
+            setTimeDisplayMs(nextDurationMs);
+            showTimerNotice("お疲れ！休憩時間だよ");
+            return;
+          }
+
+          const nextDurationMs = getPomodoroDurationMs("focus", {
+            focusMin: pomodoroFocusMin,
+            shortBreakMin: pomodoroShortBreakMin,
+            longBreakMin: pomodoroLongBreakMin,
+          });
+          setPomodoroPhase("focus");
+          setTimeStartedAtMs(now);
+          setElapsedBeforePauseMs(0);
+          setActiveTimerDurationMs(nextDurationMs);
+          setTimeDisplayMs(nextDurationMs);
+          showTimerNotice("よし！作業だ！");
+          return;
+        }
+
         setTimeRunning(false);
         setActiveTimeMode(null);
         setElapsedBeforePauseMs(0);
-        setTimerNoticeVisible(true);
+        showTimerNotice("タイマー終了！");
       }
     }, 200);
 
     return () => window.clearInterval(intervalId);
-  }, [timeRunning, timeStartedAtMs, activeTimeMode, activeTimerDurationMs, elapsedBeforePauseMs]);
+  }, [
+    timeRunning,
+    timeStartedAtMs,
+    activeTimeMode,
+    activeTimerDurationMs,
+    elapsedBeforePauseMs,
+    pomodoroPhase,
+    pomodoroCompletedFocusCount,
+    pomodoroFocusMin,
+    pomodoroShortBreakMin,
+    pomodoroLongBreakMin,
+    pomodoroLongBreakEvery,
+  ]);
 
   useEffect(() => {
-    const currentStage = getCharacterStageId(memoCount);
+    const currentStage = getCharacterStageId(characterPoints);
     if (currentStage !== prevStageRef.current) {
       prevStageRef.current = currentStage;
       if (evolutionTimerRef.current !== null) window.clearTimeout(evolutionTimerRef.current);
@@ -243,17 +458,19 @@ function App() {
       window.setTimeout(() => setIsEvolving(false), 600);
       evolutionTimerRef.current = window.setTimeout(() => setEvolutionToast(false), 2500);
     }
-  }, [memoCount]);
-
-  const timerHours = parseTimerInput(timerHoursInput, 99);
-  const timerMinutes = parseTimerInput(timerMinutesInput, 59);
-  const timerDurationMs = (timerHours * 60 * 60 + timerMinutes * 60) * 1000;
-  const startTimerDisabled = selectedTimeMode === "timer" && timerDurationMs <= 0;
+  }, [characterPoints]);
 
   function startTime() {
     const now = Date.now();
     if (selectedTimeMode === "timer" && timerDurationMs <= 0) {
       setMessage("Timerは1分以上で設定してください");
+      return;
+    }
+    if (
+      selectedTimeMode === "pomodoro" &&
+      (pomodoroFocusMin <= 0 || pomodoroShortBreakMin <= 0 || pomodoroLongBreakMin <= 0 || pomodoroLongBreakEvery <= 0)
+    ) {
+      setMessage("Pomodoroの設定値は1以上で入力してください");
       return;
     }
 
@@ -262,9 +479,25 @@ function App() {
     setTimeRunning(true);
     setTimeStartedAtMs(now);
     setElapsedBeforePauseMs(0);
-    setActiveTimerDurationMs(selectedTimeMode === "timer" ? timerDurationMs : 0);
-    setTimeDisplayMs(selectedTimeMode === "stopwatch" ? 0 : timerDurationMs);
-    setTimerNoticeVisible(false);
+    setTimerNotice(null);
+
+    if (selectedTimeMode === "pomodoro") {
+      const durationMs = getPomodoroDurationMs("focus", {
+        focusMin: pomodoroFocusMin,
+        shortBreakMin: pomodoroShortBreakMin,
+        longBreakMin: pomodoroLongBreakMin,
+      });
+      setPomodoroPhase("focus");
+      setPomodoroCompletedFocusCount(0);
+      setActiveTimerDurationMs(durationMs);
+      setTimeDisplayMs(durationMs);
+    } else {
+      setPomodoroPhase(null);
+      setPomodoroCompletedFocusCount(0);
+      setActiveTimerDurationMs(selectedTimeMode === "timer" ? timerDurationMs : 0);
+      setTimeDisplayMs(selectedTimeMode === "stopwatch" ? 0 : timerDurationMs);
+    }
+
     setClockOpen(false);
   }
 
@@ -276,7 +509,9 @@ function App() {
     setActiveTimerDurationMs(0);
     setTimeDisplayMs(0);
     setClockOpen(false);
-    setTimerNoticeVisible(false);
+    setTimerNotice(null);
+    setPomodoroPhase(null);
+    setPomodoroCompletedFocusCount(0);
   }
 
   function togglePauseResume() {
@@ -326,11 +561,72 @@ function App() {
     dragged.current = false;
   }
 
-  async function sendMemo() {
+  async function captureScreenshotDataUrl(): Promise<string> {
+    try {
+      return await invoke<string>("capture_screenshot_data_url");
+    } catch {
+      // Fallback for browser runtime.
+    }
+
+    if (!navigator.mediaDevices?.getDisplayMedia) {
+      throw new Error("この環境ではスクリーンショット取得に対応していません");
+    }
+
+    const stream = await navigator.mediaDevices.getDisplayMedia({
+      video: true,
+      audio: false,
+    });
+
+    try {
+      const video = document.createElement("video");
+      video.srcObject = stream;
+      video.muted = true;
+      video.playsInline = true;
+      await video.play();
+
+      await new Promise<void>((resolve) => {
+        if (video.readyState >= 2) {
+          resolve();
+          return;
+        }
+        video.onloadeddata = () => resolve();
+      });
+
+      if (!video.videoWidth || !video.videoHeight) {
+        throw new Error("スクリーンショットの解像度取得に失敗しました");
+      }
+
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const context = canvas.getContext("2d");
+      if (!context) {
+        throw new Error("スクリーンショット描画コンテキストの作成に失敗しました");
+      }
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL("image/png");
+    } finally {
+      stream.getTracks().forEach((track) => track.stop());
+    }
+  }
+
+  async function sendMemo(withScreenshot: boolean) {
     setMessage(null);
     if (!text.trim()) {
       setMessage("本文が空です");
       return;
+    }
+
+    let screenshotDataUrl: string | undefined;
+    if (withScreenshot) {
+      try {
+        setMessage("スクリーンショット取得中...");
+        screenshotDataUrl = await captureScreenshotDataUrl();
+      } catch (error: unknown) {
+        const detail = error instanceof Error ? error.message : String(error);
+        setMessage(`スクリーンショット取得失敗: ${detail}`);
+        return;
+      }
     }
 
     setSending(true);
@@ -343,6 +639,7 @@ function App() {
           status,
           user: user.trim(),
           timestamp: new Date().toISOString(),
+          screenshotDataUrl,
         }),
       });
 
@@ -351,19 +648,35 @@ function App() {
         throw new Error(`API failed: ${response.status} ${body}`);
       }
 
-      const result = (await response.json().catch(() => ({}))) as { message?: string };
+      const result = (await response.json().catch(() => ({}))) as {
+        message?: string;
+        screenshot_url?: string | null;
+      };
       if (response.status === 207) {
-        setMessage("メモは保存しましたが、Slack送信に失敗しました");
+        setMessage(result.message ?? "メモは保存しましたが、一部処理に失敗しました");
       } else {
         const now = Date.now();
         setText("");
         setLastSentAtMs(now);
         setSnoozeUntilMs(null);
         setReminderVisible(false);
-        setMemoCount((c) => c + 1);
+        // メモ保存後にサーバーからポイント・空腹度を再取得してキャラクターを更新
+        fetch(`${apiBase}/api/character`)
+          .then((r) => r.ok ? r.json() : null)
+          .then((data: { points: number; hunger_level: number } | null) => {
+            if (data) {
+              setCharacterPoints(data.points);
+              setCharacterHunger(data.hunger_level);
+            }
+          })
+          .catch(() => undefined);
         setSentSuccess(true);
         window.setTimeout(() => setSentSuccess(false), 800);
-        setMessage(result.message ?? "Slackに送信しました");
+        if (withScreenshot) {
+          setMessage(result.screenshot_url ? "メモとスクリーンショットを保存しました" : "メモは保存しました");
+        } else {
+          setMessage(result.message ?? "メモを保存しました");
+        }
       }
     } catch (error: unknown) {
       const detail = error instanceof Error ? error.message : String(error);
@@ -374,7 +687,9 @@ function App() {
   }
 
   return (
-    <main className={`app ${isOpen ? "open" : "collapsed"} ${reminderVisible && !isOpen ? "with-reminder" : ""}`}>
+    <main
+      className={`app ${isOpen ? "open" : "collapsed"} ${(reminderVisible || timerNotice) && !isOpen ? "with-reminder" : ""}`}
+    >
       <div className="avatar-area">
         <button
           className={[
@@ -390,7 +705,7 @@ function App() {
           type="button"
         >
           <span className="character-face">
-            <CharacterStage count={memoCount} size={44} variant={variant} />
+            <CharacterStage count={characterPoints} size={44} variant={variant} decayLevel={decayLevel} />
           </span>
         </button>
         {/* プレビュー用ステージ切り替え */}
@@ -404,8 +719,8 @@ function App() {
             ].map((stage) => (
               <button
                 key={stage.count}
-                className={`preview-btn ${getCharacterStageId(memoCount) === getCharacterStageId(stage.count) ? "active" : ""}`}
-                onClick={() => setMemoCount(stage.count)}
+                className={`preview-btn ${getCharacterStageId(characterPoints) === getCharacterStageId(stage.count) ? "active" : ""}`}
+                onClick={() => setCharacterPoints(stage.count)}
                 type="button"
               >
                 <CharacterStage count={stage.count} size={16} variant={variant} />
@@ -421,26 +736,24 @@ function App() {
                 onClick={() => setVariant(v)}
                 type="button"
               >
-                <CharacterStage count={memoCount} size={16} variant={v} />
+                <CharacterStage count={characterPoints} size={16} variant={v} />
                 <span>No.{v}</span>
               </button>
             ))}
           </div>
         </div>
         {evolutionToast ? (
-          <div className="evolution-toast">✨ 進化した！ {getCharacterEmoji(memoCount)}</div>
+          <div className="evolution-toast">✨ 進化した！ {getCharacterEmoji(characterPoints)}</div>
         ) : null}
-        {timerNoticeVisible ? (
-          <aside className="timer-bubble">
-            <p>タイマー終了！</p>
-            <div className="reminder-actions">
-              <button onClick={() => setTimerNoticeVisible(false)} type="button">
-                OK
-              </button>
-            </div>
+        {timerNotice ? (
+          <aside className="timer-bubble" key={timerNotice.id} ref={timerBubbleRef}>
+            <p>{timerNotice.message}</p>
+            <button className="timer-ok" onClick={() => setTimerNotice(null)} type="button">
+              OK
+            </button>
           </aside>
         ) : null}
-        {!timerNoticeVisible && reminderVisible && !isOpen ? (
+        {!timerNotice && reminderVisible && !isOpen ? (
           <aside className="reminder-bubble">
             <p>そろそろ思考をメモする？</p>
             <div className="reminder-actions">
@@ -475,7 +788,14 @@ function App() {
           <div className="drag-handle" data-tauri-drag-region title="drag" />
           <p className="eyebrow">Thought Drop</p>
           <div className="title-row">
-            <h1>今の思考をそのまま送る</h1>
+            <button
+              className={`agent-switch ${panelMode === "agent" ? "active" : ""}`}
+              onClick={() => setPanelMode((current) => (current === "memo" ? "agent" : "memo"))}
+              type="button"
+            >
+              <span className="agent-switch-icon" aria-hidden>🤖</span>
+              <span>{panelMode === "memo" ? "Agent" : "Memo"}</span>
+            </button>
             <div className="clock-controls" ref={clockRef}>
               <div className={`clock-pill ${activeTimeMode ? "active" : ""}`}>
                 {activeTimeMode ? (
@@ -488,7 +808,11 @@ function App() {
                 <div className="clock-widget">
                   <button className="clock-trigger" onClick={() => setClockOpen((current) => !current)} type="button">
                     {activeTimeMode ? (
-                      <span className="clock-time">{formatElapsed(timeDisplayMs)}</span>
+                      <span className="clock-time">
+                        {activeTimeMode === "pomodoro" && pomodoroPhase
+                          ? `${getPomodoroPhaseLabel(pomodoroPhase)} ${formatElapsed(timeDisplayMs)}`
+                          : formatElapsed(timeDisplayMs)}
+                      </span>
                     ) : (
                       <span aria-hidden className="clock-icon">
                         <span className="clock-icon-ring" />
@@ -513,6 +837,13 @@ function App() {
                           type="button"
                         >
                           Timer
+                        </button>
+                        <button
+                          className={selectedTimeMode === "pomodoro" ? "active" : ""}
+                          onClick={() => setSelectedTimeMode("pomodoro")}
+                          type="button"
+                        >
+                          Pomodoro
                         </button>
                       </div>
                       {selectedTimeMode === "timer" ? (
@@ -547,6 +878,79 @@ function App() {
                           </label>
                         </div>
                       ) : null}
+                      {selectedTimeMode === "pomodoro" ? (
+                        <div className="pomodoro-meta">
+                          <div className="pomodoro-inputs">
+                            <label htmlFor="pomodoro-focus-input">
+                              Focus
+                              <input
+                                id="pomodoro-focus-input"
+                                inputMode="numeric"
+                                maxLength={3}
+                                onBlur={() => setPomodoroFocusInput(String(pomodoroFocusMin || DEFAULT_POMODORO_FOCUS_MIN))}
+                                onChange={(event) =>
+                                  setPomodoroFocusInput(event.currentTarget.value.replace(/[^\d]/g, "").slice(0, 3))
+                                }
+                                type="text"
+                                value={pomodoroFocusInput}
+                              />
+                              m
+                            </label>
+                            <label htmlFor="pomodoro-short-break-input">
+                              Short
+                              <input
+                                id="pomodoro-short-break-input"
+                                inputMode="numeric"
+                                maxLength={2}
+                                onBlur={() =>
+                                  setPomodoroShortBreakInput(String(pomodoroShortBreakMin || DEFAULT_POMODORO_SHORT_BREAK_MIN))
+                                }
+                                onChange={(event) =>
+                                  setPomodoroShortBreakInput(event.currentTarget.value.replace(/[^\d]/g, "").slice(0, 2))
+                                }
+                                type="text"
+                                value={pomodoroShortBreakInput}
+                              />
+                              m
+                            </label>
+                            <label htmlFor="pomodoro-long-break-input">
+                              Long
+                              <input
+                                id="pomodoro-long-break-input"
+                                inputMode="numeric"
+                                maxLength={2}
+                                onBlur={() =>
+                                  setPomodoroLongBreakInput(String(pomodoroLongBreakMin || DEFAULT_POMODORO_LONG_BREAK_MIN))
+                                }
+                                onChange={(event) =>
+                                  setPomodoroLongBreakInput(event.currentTarget.value.replace(/[^\d]/g, "").slice(0, 2))
+                                }
+                                type="text"
+                                value={pomodoroLongBreakInput}
+                              />
+                              m
+                            </label>
+                            <label htmlFor="pomodoro-long-break-every-input">
+                              Every
+                              <input
+                                id="pomodoro-long-break-every-input"
+                                inputMode="numeric"
+                                maxLength={2}
+                                onBlur={() =>
+                                  setPomodoroLongBreakEveryInput(String(pomodoroLongBreakEvery || DEFAULT_POMODORO_LONG_BREAK_EVERY))
+                                }
+                                onChange={(event) =>
+                                  setPomodoroLongBreakEveryInput(event.currentTarget.value.replace(/[^\d]/g, "").slice(0, 2))
+                                }
+                                type="text"
+                                value={pomodoroLongBreakEveryInput}
+                              />
+                              focus
+                            </label>
+                          </div>
+                          <p>Completed Focus: {pomodoroCompletedFocusCount}</p>
+                        </div>
+                      ) : null}
                       <button className="clock-start" disabled={startTimerDisabled} onClick={startTime} type="button">
                         Start {selectedTimeMode}
                       </button>
@@ -563,85 +967,162 @@ function App() {
           </div>
         </header>
 
-        <div className="field">
-          <label htmlFor="user-input">Name</label>
-          <input
-            id="user-input"
-            value={user}
-            onChange={(event) => setUser(event.currentTarget.value)}
-            placeholder="teamK"
-          />
-        </div>
+        {panelMode === "memo" ? (
+          <>
+            <div className="field">
+              <label htmlFor="user-input">Name</label>
+              <input
+                id="user-input"
+                value={user}
+                onChange={(event) => setUser(event.currentTarget.value)}
+                placeholder="teamK"
+              />
+            </div>
 
-        <div className="field">
-          <span>Status</span>
-          <div className="status-select" ref={statusRef}>
-            <button
-              className="status-trigger"
-              onClick={() => setStatusOpen((current) => !current)}
-              type="button"
-            >
-              <span>{status}</span>
-              <span className={`caret ${statusOpen ? "open" : ""}`}>▾</span>
-            </button>
-            {statusOpen ? (
-              <div className="status-menu">
-                {STATUSES.map((item) => (
-                  <button
-                    key={item}
-                    className={`status-option ${status === item ? "active" : ""}`}
-                    onClick={() => {
-                      setStatus(item);
-                      setStatusOpen(false);
-                    }}
-                    type="button"
-                  >
-                    {item}
-                  </button>
-                ))}
+            <div className="field">
+              <span>Status</span>
+              <div className="status-select" ref={statusRef}>
+                <button
+                  className="status-trigger"
+                  onClick={() => setStatusOpen((current) => !current)}
+                  type="button"
+                >
+                  <span>{status}</span>
+                  <span className={`caret ${statusOpen ? "open" : ""}`}>▾</span>
+                </button>
+                {statusOpen ? (
+                  <div className="status-menu">
+                    {STATUSES.map((item) => (
+                      <button
+                        key={item}
+                        className={`status-option ${status === item ? "active" : ""}`}
+                        onClick={() => {
+                          setStatus(item);
+                          setStatusOpen(false);
+                        }}
+                        type="button"
+                      >
+                        {item}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
               </div>
+            </div>
+
+            <div className="field">
+              <label htmlFor="remind-min-input">Reminder Interval (min)</label>
+              <input
+                id="remind-min-input"
+                inputMode="numeric"
+                min={1}
+                onChange={(event) => {
+                  const value = Number(event.currentTarget.value);
+                  if (!Number.isFinite(value) || value <= 0) return;
+                  setRemindAfterMin(Math.floor(value));
+                }}
+                type="number"
+                value={remindAfterMin}
+              />
+            </div>
+
+            <div className="field memo-field">
+              <div className="memo-head">
+                <label htmlFor="memo-input">Memo</label>
+              </div>
+              <textarea
+                id="memo-input"
+                rows={5}
+                value={text}
+                onChange={(event) => setText(event.currentTarget.value)}
+                placeholder="いまの思考/詰まりをそのまま書く"
+              />
+            </div>
+
+            <footer className="panel-footer">
+              <button className="send secondary" onClick={() => void sendMemo(false)} disabled={sending} type="button">
+                {sending ? "Saving..." : "Save Memo"}
+              </button>
+              <button className="send" onClick={() => void sendMemo(true)} disabled={sending} type="button">
+                {sending ? "Saving..." : "Save with Screenshot"}
+              </button>
+            </footer>
+
+            {message ? (
+              <p className={`message ${message.startsWith("送信失敗") ? "error" : "ok"}`}>{message}</p>
             ) : null}
-          </div>
-        </div>
-
-        <div className="field">
-          <label htmlFor="remind-min-input">Reminder Interval (min)</label>
-          <input
-            id="remind-min-input"
-            inputMode="numeric"
-            min={1}
-            onChange={(event) => {
-              const value = Number(event.currentTarget.value);
-              if (!Number.isFinite(value) || value <= 0) return;
-              setRemindAfterMin(Math.floor(value));
-            }}
-            type="number"
-            value={remindAfterMin}
-          />
-        </div>
-
-        <div className="field memo-field">
-          <div className="memo-head">
-            <label htmlFor="memo-input">Memo</label>
-          </div>
-          <textarea
-            id="memo-input"
-            rows={5}
-            value={text}
-            onChange={(event) => setText(event.currentTarget.value)}
-            placeholder="いまの思考/詰まりをそのまま書く"
-          />
-        </div>
-
-        <footer className="panel-footer">
-          <button className="send" onClick={sendMemo} disabled={sending} type="button">
-            {sending ? "Sending..." : "Send to Slack"}
-          </button>
-        </footer>
-
-        {message ? (
-          <p className={`message ${message.startsWith("送信失敗") ? "error" : "ok"}`}>{message}</p>
-        ) : null}
+          </>
+        ) : (
+          <section className="agent-screen" aria-label="agent mode blank screen">
+            <div className="agent-canvas">
+              {agentMessages.length === 0 ? (
+                <p className="agent-ui-note">Agentモード: 下の入力欄から質問してください。</p>
+              ) : (
+                <div className="agent-messages">
+                  {agentMessages.map((item, index) => (
+                    <div key={`${item.role}-${index}`} className={`agent-message ${item.role}`}>
+                      {item.text}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {agentError ? <p className="agent-error">{agentError}</p> : null}
+            </div>
+            <div className="agent-composer">
+              <div className="agent-plus-wrap" ref={agentPlusRef}>
+                <button
+                  className="agent-plus"
+                  onClick={() => setAgentMenuOpen((current) => !current)}
+                  type="button"
+                >
+                  +
+                </button>
+                {agentMenuOpen ? (
+                  <div className="agent-plus-menu">
+                    <button
+                      onClick={() => {
+                        setAgentWithScreenshot(false);
+                        setAgentMenuOpen(false);
+                      }}
+                      type="button"
+                    >
+                      Ask only
+                    </button>
+                    <button
+                      onClick={() => {
+                        setAgentWithScreenshot(true);
+                        setAgentMenuOpen(false);
+                      }}
+                      type="button"
+                    >
+                      Ask with Screenshot
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+              <input
+                className="agent-input"
+                onChange={(event) => setAgentInput(event.currentTarget.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void submitAgentUiAsk();
+                  }
+                }}
+                placeholder={agentWithScreenshot ? "スクショ付きで質問..." : "質問する..."}
+                value={agentInput}
+              />
+              <button
+                className="agent-ask"
+                disabled={!agentInput.trim() || agentSending}
+                onClick={() => void submitAgentUiAsk()}
+                type="button"
+              >
+                {agentSending ? "Asking..." : agentWithScreenshot ? "Ask + Shot" : "Ask"}
+              </button>
+            </div>
+          </section>
+        )}
       </section>
     </main>
   );

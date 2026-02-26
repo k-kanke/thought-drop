@@ -3,4 +3,8 @@ export interface MemoRequest {
   status?: string;
   user?: string;
   timestamp?: string;
+  screenshotDataUrl?: string;
+  mode?: 'instant' | 'stockpile' | string;
+  stuckMinutes?: number;
+  tags?: string[];
 }
