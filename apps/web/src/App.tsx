@@ -1,4 +1,5 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
+import { CharacterStage } from './components/characters'
 import './App.css'
 
 type Summary = {
@@ -60,17 +61,6 @@ type ModeFilter = 'all' | 'instant' | 'stockpile'
 
 const STATUS_OPTIONS = ['集中', '調査中', '詰まり', 'レビュー待ち']
 
-// デスクトップ側の memoCount 閾値（0/5/10/30）に合わせ、同じ段階で絵文字が変わるようにする
-const CHARACTER_STAGES = [
-  { threshold: 90, emoji: '🐔' },
-  { threshold: 30, emoji: '🐥' },
-  { threshold: 15, emoji: '🐣' },
-  { threshold: 0,  emoji: '🥚' },
-] as const
-
-function getCharacterEmoji(points: number): string {
-  return CHARACTER_STAGES.find((s) => points >= s.threshold)?.emoji ?? '🥚'
-}
 
 function formatDateTime(value: string): string {
   const date = new Date(value)
@@ -106,6 +96,18 @@ function App() {
   const [character, setCharacter] = useState<CharacterState | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const [expandedMemos, setExpandedMemos] = useState<Set<number>>(new Set())
+
+  const MEMO_COLLAPSE_THRESHOLD = 80 // この文字数を超えたら折りたたむ
+
+  function toggleMemoExpand(id: number) {
+    setExpandedMemos((prev) => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
 
   const [blogMode, setBlogMode] = useState<ModeFilter>('all')
   const [blogTitle, setBlogTitle] = useState('週次技術ログ')
@@ -266,11 +268,17 @@ function App() {
             <h2>キャラクター</h2>
             {character ? (
               <div className="character">
-                <p className="character-emoji">{getCharacterEmoji(character.points)}</p>
-                <p>Lv.{character.level} / {character.evolution_path}</p>
-                <p>ポイント: {character.points}</p>
-                <p>空腹度: {character.hunger_level}</p>
-                <p>気分: {character.mood}</p>
+                <CharacterStage
+                  count={character.points}
+                  size={88}
+                  decayLevel={character.hunger_level >= 75 ? 2 : character.hunger_level >= 40 ? 1 : 0}
+                />
+                <div className="character-info">
+                  <p>Lv.{character.level} / {character.evolution_path}</p>
+                  <p>ポイント: {character.points}</p>
+                  <p>空腹度: {character.hunger_level}</p>
+                  <p>気分: {character.mood}</p>
+                </div>
                 <div className="row">
                   <button type="button" className="ghost" onClick={() => void evolve('backend')}>バックエンド</button>
                   <button type="button" className="ghost" onClick={() => void evolve('infrastructure')}>インフラ</button>
@@ -372,7 +380,14 @@ function App() {
                     <p className="meta">
                       #{memo.id} {formatDateTime(memo.created_at)} / {memo.status ?? '-'} / {memo.mode}
                     </p>
-                    <p>{memo.content}</p>
+                    <p className={`memo-content ${memo.content.length > MEMO_COLLAPSE_THRESHOLD && !expandedMemos.has(memo.id) ? 'collapsed' : ''}`}>
+                      {memo.content}
+                    </p>
+                    {memo.content.length > MEMO_COLLAPSE_THRESHOLD ? (
+                      <button type="button" className="expand-toggle" onClick={() => toggleMemoExpand(memo.id)}>
+                        {expandedMemos.has(memo.id) ? '折りたたむ ▲' : 'もっと見る ▼'}
+                      </button>
+                    ) : null}
                     <div className="row wrap">
                       {memo.tags.map((tag) => <span key={tag} className="pill">#{tag}</span>)}
                     </div>
