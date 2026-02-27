@@ -187,6 +187,7 @@ function App() {
   const [isEvolving, setIsEvolving] = useState(false);
   const [sentSuccess, setSentSuccess] = useState(false);
   const [variant, setVariant] = useState<1 | 2 | 3>(1);
+  const showPreviewSwitcher = import.meta.env.VITE_SHOW_PREVIEW_SWITCHER === "true";
 
   // キャラクター情報を定期取得（web側で進化・空腹変化した場合も反映するため）
   useEffect(() => {
@@ -708,40 +709,41 @@ function App() {
             <CharacterStage count={characterPoints} size={44} variant={variant} decayLevel={decayLevel} />
           </span>
         </button>
-        {/* プレビュー用ステージ切り替え */}
-        <div className="preview-switcher">
-          <div className="preview-row">
-            {[
-              { count: 0, label: "たまご" },
-              { count: 5, label: "孵化" },
-              { count: 10, label: "ひよこ" },
-              { count: 30, label: "にわとり" },
-            ].map((stage) => (
-              <button
-                key={stage.count}
-                className={`preview-btn ${getCharacterStageId(characterPoints) === getCharacterStageId(stage.count) ? "active" : ""}`}
-                onClick={() => setCharacterPoints(stage.count)}
-                type="button"
-              >
-                <CharacterStage count={stage.count} size={16} variant={variant} />
-                <span>{stage.label}</span>
-              </button>
-            ))}
+        {showPreviewSwitcher ? (
+          <div className="preview-switcher">
+            <div className="preview-row">
+              {[
+                { count: 0, label: "たまご" },
+                { count: 5, label: "孵化" },
+                { count: 10, label: "ひよこ" },
+                { count: 30, label: "にわとり" },
+              ].map((stage) => (
+                <button
+                  key={stage.count}
+                  className={`preview-btn ${getCharacterStageId(characterPoints) === getCharacterStageId(stage.count) ? "active" : ""}`}
+                  onClick={() => setCharacterPoints(stage.count)}
+                  type="button"
+                >
+                  <CharacterStage count={stage.count} size={16} variant={variant} />
+                  <span>{stage.label}</span>
+                </button>
+              ))}
+            </div>
+            <div className="preview-row">
+              {([1, 2, 3] as const).map((v) => (
+                <button
+                  key={v}
+                  className={`preview-btn variant-btn ${variant === v ? "active" : ""}`}
+                  onClick={() => setVariant(v)}
+                  type="button"
+                >
+                  <CharacterStage count={characterPoints} size={16} variant={v} />
+                  <span>No.{v}</span>
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="preview-row">
-            {([1, 2, 3] as const).map((v) => (
-              <button
-                key={v}
-                className={`preview-btn variant-btn ${variant === v ? "active" : ""}`}
-                onClick={() => setVariant(v)}
-                type="button"
-              >
-                <CharacterStage count={characterPoints} size={16} variant={v} />
-                <span>No.{v}</span>
-              </button>
-            ))}
-          </div>
-        </div>
+        ) : null}
         {evolutionToast ? (
           <div className="evolution-toast">✨ 進化した！ {getCharacterEmoji(characterPoints)}</div>
         ) : null}
