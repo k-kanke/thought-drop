@@ -1032,7 +1032,7 @@ function App() {
           <section className="agent-screen" aria-label="agent mode blank screen">
             <div className="agent-canvas">
               {agentMessages.length === 0 ? (
-                <p className="agent-ui-note">Agentモード: 下の入力欄から質問してください。</p>
+                <p className="agent-ui-note">下の入力欄から質問してください。</p>
               ) : (
                 <div className="agent-messages">
                   {agentMessages.map((item, index) => (
