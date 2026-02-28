@@ -108,13 +108,16 @@ function App() {
     setAuthChecking(true)
     setAuthError(null)
     try {
-      let res = await fetch(`${apiBase}/health`)
-      if (res.status === 401) {
-        res = await authFetch(`${apiBase}/health`)
+      // Check a protected endpoint using any saved credentials.
+      // Do NOT rely on /health because it is intentionally public for platform health checks.
+      const res = await authFetch(`${apiBase}/api/tags`)
+      if (res.ok) {
+        setAuthReady(true)
+      } else if (res.status === 401) {
+        setAuthReady(false)
+      } else {
+        setAuthError(`API error: ${res.status}`)
       }
-      if (res.ok) setAuthReady(true)
-      else if (res.status === 401) setAuthReady(false)
-      else setAuthError(`API error: ${res.status}`)
     } catch (e) {
       setAuthError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -222,8 +225,10 @@ function App() {
   }, [apiBase, timelineView, searchQuery, statusFilter, tagFilter, resolvedFilter, fromDate, toDate])
 
   useEffect(() => {
-    void fetchDashboard()
-  }, [fetchDashboard])
+    if (authReady) {
+      void fetchDashboard()
+    }
+  }, [fetchDashboard, authReady])
 
   async function toggleResolved(memo: TimelineMemo): Promise<void> {
     setError(null)
