@@ -8,7 +8,10 @@ import tagsRouter from './routes/tags';
 import characterRouter from './routes/character';
 import aiRouter from './routes/ai';
 
-dotenv.config();
+// Load .env only in non-production to avoid overriding platform env (e.g., PORT on Render)
+if (process.env.NODE_ENV !== 'production') {
+  dotenv.config();
+}
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3001;
