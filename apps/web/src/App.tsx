@@ -114,12 +114,7 @@ function App() {
   const [blogDraft, setBlogDraft] = useState('')
   const [blogLoading, setBlogLoading] = useState(false)
 
-  // --- Chat (v0) ---
-  type ChatMessage = { role: 'user' | 'assistant' | 'system'; content: string }
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
-  const [chatInput, setChatInput] = useState('')
-  const [chatLoading, setChatLoading] = useState(false)
-  const [chatError, setChatError] = useState<string | null>(null)
+  // Chat UI is not used on web frontend (removed)
 
   const fetchDashboard = useCallback(async (): Promise<void> => {
     setLoading(true)
@@ -255,70 +250,7 @@ function App() {
     }
   }
 
-  async function sendChat(event: FormEvent): Promise<void> {
-    event.preventDefault()
-    const text = chatInput.trim()
-    if (!text) return
-    setChatLoading(true)
-    setChatError(null)
-    const userMsg: ChatMessage = { role: 'user', content: text }
-    const next: ChatMessage[] = [...chatMessages, userMsg]
-    setChatMessages(next)
-    setChatInput('')
-    try {
-      const response = await fetch(`${apiBase}/api/ai/chat/stream`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ messages: next }),
-      })
-      if (!response.ok || !response.body) throw new Error(`chat stream API failed: ${response.status}`)
-
-      // placeholder assistant message
-      const assistantPlaceholder: ChatMessage = { role: 'assistant', content: '' }
-      setChatMessages((prev) => [...prev, assistantPlaceholder])
-
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-      let buf = ''
-      // eslint-disable-next-line no-constant-condition
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buf += decoder.decode(value, { stream: true })
-
-        let idx
-        while ((idx = buf.indexOf('\n\n')) !== -1) {
-          const chunk = buf.slice(0, idx)
-          buf = buf.slice(idx + 2)
-          const lines = chunk.split('\n').map((l) => l.trim())
-          for (const line of lines) {
-            if (!line.startsWith('data:')) continue
-            const payload = line.slice(5).trim()
-            if (!payload || payload === '[DONE]') continue
-            try {
-              const json = JSON.parse(payload) as { delta?: string }
-              if (json.delta) {
-                setChatMessages((prev) => {
-                  const last = prev[prev.length - 1]
-                  if (!last || last.role !== 'assistant') return prev
-                  const updated = [...prev]
-                  updated[updated.length - 1] = { ...last, content: last.content + json.delta }
-                  return updated
-                })
-              }
-            } catch {
-              // ignore parse errors
-            }
-          }
-        }
-      }
-    } catch (unknownError) {
-      const detail = unknownError instanceof Error ? unknownError.message : String(unknownError)
-      setChatError(detail)
-    } finally {
-      setChatLoading(false)
-    }
-  }
+  // sendChat removed
 
   const insightTopStuck = summary?.top_stuck?.content ?? '該当なし'
 
@@ -511,39 +443,6 @@ function App() {
       </section>
 
       {error ? <p className="error">エラー: {error}</p> : null}
-
-      <section className="panel" style={{ marginTop: 12 }}>
-        <h2>AIチャット（v0）</h2>
-        <div style={{ display: 'grid', gap: 8 }}>
-          <div style={{
-            border: '2px solid #2a5878', background: '#0a1420', padding: 10,
-            maxHeight: 260, overflowY: 'auto', color: '#d0e8f8', fontSize: 13,
-          }}>
-            {chatMessages.length === 0 ? (
-              <p style={{ color: '#80c0e0', margin: 0 }}>ここに会話が表示されます。</p>
-            ) : chatMessages.map((m, idx) => (
-              <div key={idx} style={{ margin: '6px 0' }}>
-                <strong style={{ color: m.role === 'user' ? '#f8e040' : '#5ad0f8' }}>
-                  {m.role === 'user' ? 'You' : m.role === 'assistant' ? 'Assistant' : 'System'}
-                </strong>
-                <div style={{ whiteSpace: 'pre-wrap' }}>{m.content}</div>
-              </div>
-            ))}
-          </div>
-          <form onSubmit={(e) => void sendChat(e)} className="row" style={{ alignItems: 'stretch' }}>
-            <input
-              value={chatInput}
-              onChange={(e) => setChatInput(e.currentTarget.value)}
-              placeholder="メッセージを入力..."
-              style={{ flex: 1 }}
-            />
-            <button type="submit" disabled={chatLoading}>
-              {chatLoading ? '送信中...' : '送信'}
-            </button>
-          </form>
-          {chatError ? <p className="error">チャットエラー: {chatError}</p> : null}
-        </div>
-      </section>
     </div>
   )
 }
