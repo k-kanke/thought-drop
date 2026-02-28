@@ -154,6 +154,9 @@ function App() {
     })
   }
 
+  // Suppress TS unused warnings for collapsed board view
+  void expandedMemos; void MEMO_COLLAPSE_THRESHOLD; void toggleMemoExpand;
+
   const [blogMode, setBlogMode] = useState<ModeFilter>('all')
   const [blogTitle, setBlogTitle] = useState('週次技術ログ')
   const [blogDraft, setBlogDraft] = useState('')
