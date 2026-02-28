@@ -12,8 +12,6 @@ export interface CharacterSVGProps {
 
 type CharacterStageId = "egg" | "hatching" | "chick" | "rooster";
 
-export const VARIANT_COUNT = 3;
-
 const CHARACTER_STAGES: { threshold: number; id: CharacterStageId; label: string }[] = [
   { threshold: 90, id: "rooster", label: "🐔" },
   { threshold: 30, id: "chick",   label: "🐥" },
@@ -28,12 +26,12 @@ const SVG_MAP: Record<CharacterStageId, React.FC<CharacterSVGProps>> = {
   rooster: RoosterSVG,
 };
 
-export function getCharacterStageId(count: number): CharacterStageId {
-  return CHARACTER_STAGES.find((s) => count >= s.threshold)?.id ?? "egg";
+export function getCharacterStageId(points: number): CharacterStageId {
+  return CHARACTER_STAGES.find((s) => points >= s.threshold)?.id ?? "egg";
 }
 
-export function getCharacterEmoji(count: number): string {
-  return CHARACTER_STAGES.find((s) => count >= s.threshold)?.label ?? "🥚";
+export function getCharacterEmoji(points: number): string {
+  return CHARACTER_STAGES.find((s) => points >= s.threshold)?.label ?? "🥚";
 }
 
 export function CharacterStage({

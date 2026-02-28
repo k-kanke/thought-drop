@@ -1,0 +1,66 @@
+/* === ドット絵キャラクター カラーパレット === */
+:root {
+  /* たまご */
+  --px-egg-light: #FFF8E1;
+  --px-egg-base: #FFE0B2;
+  --px-egg-shadow: #FFCC80;
+  --px-egg-crack: #D7CCC8;
+
+  /* ひよこ体 */
+  --px-chick-light: #FFF9C4;
+  --px-chick-base: #FFD54F;
+  --px-chick-shadow: #FFB300;
+
+  /* にわとり追加 */
+  --px-comb: #E53935;
+  --px-comb-shadow: #B71C1C;
+  --px-tail-1: #43A047;
+  --px-tail-2: #1565C0;
+  --px-tail-3: #E53935;
+
+  /* 共通 */
+  --px-eye: #212121;
+  --px-eye-highlight: #FFFFFF;
+  --px-beak: #FF8F00;
+  --px-beak-shadow: #E65100;
+  --px-shell-top: #FFF8E1;
+  --px-shell-shadow: #FFCC80;
+  --px-blush: #FFAB91;
+  --px-feet: #FF8F00;
+}
+
+/* === 目パチ === */
+@keyframes blink {
+  0%, 90%, 100% { opacity: 1; }
+  95% { opacity: 0; }
+}
+
+.character-svg .eye {
+  animation: blink 3.5s ease-in-out infinite;
+}
+
+.character-svg .eye-pair-right {
+  animation-delay: 0.05s;
+}
+
+/* === 羽ばたき === */
+@keyframes wing-flap {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.character-svg .wing {
+  animation: wing-flap 2s ease-in-out infinite;
+}
+
+/* === たまご微揺れ === */
+@keyframes egg-wobble {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(1.5deg); }
+  75% { transform: rotate(-1.5deg); }
+}
+
+.egg-svg {
+  animation: egg-wobble 4s ease-in-out infinite;
+  transform-origin: center center;
+}

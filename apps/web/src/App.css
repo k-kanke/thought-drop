@@ -1,7 +1,8 @@
+/* ===== PAGE LAYOUT ===== */
 .page {
   width: min(1320px, calc(100vw - 32px));
   margin: 16px auto 24px;
-  color: #0d2331;
+  color: #cce4f4;
 }
 
 .header {
@@ -9,37 +10,49 @@
   align-items: flex-end;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 3px solid #2a6090;
+  box-shadow: 0 3px 0 0 #05101a;
 }
 
+/* ===== TYPOGRAPHY ===== */
 .eyebrow {
-  margin: 0 0 2px;
-  font-size: 12px;
-  letter-spacing: 0.14em;
+  margin: 0 0 6px;
+  font-family: "Press Start 2P", monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #2a5d77;
+  color: #50c0f0;
 }
 
 h1 {
   margin: 0;
-  font-size: 24px;
-  font-weight: 700;
+  font-size: 22px;
+  font-weight: 900;
   letter-spacing: -0.01em;
+  color: #f0f8ff;
 }
 
 h2 {
-  margin: 0 0 8px;
-  font-size: 15px;
+  margin: 0 0 10px;
+  font-size: 14px;
   font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #5ad0f8;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #2a6090;
 }
 
 h3 {
-  margin: 0 0 8px;
-  font-size: 14px;
-  font-weight: 500;
-  color: #35556a;
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #80c0e0;
 }
 
+/* ===== GRID STRUCTURE ===== */
 .layout {
   display: grid;
   grid-template-columns: 320px 1fr;
@@ -53,64 +66,104 @@ h3 {
   align-content: start;
 }
 
+/* ===== PANELS (retro game window) ===== */
 .panel {
-  background: rgba(255, 255, 255, 0.87);
-  border: 1px solid #c2d9e7;
-  border-radius: 14px;
-  padding: 12px;
-  box-shadow: 0 8px 20px rgba(16, 35, 50, 0.06);
+  background: #162840;
+  border: 3px solid #2a6090;
+  border-radius: 0;
+  padding: 14px;
+  box-shadow: 4px 4px 0 0 #05101a;
 }
 
+/* ===== FORM CONTROLS ===== */
 button,
 input,
 select {
   font-family: inherit;
-  border-radius: 10px;
-  border: 1px solid #b6cedd;
-  padding: 8px 10px;
+  border-radius: 0;
+  border: 2px solid #2a6090;
+  padding: 8px 12px;
   font-size: 13px;
 }
 
 button {
-  background: #1f5f88;
-  border-color: #1f5f88;
-  color: #fff;
+  background: #1a5a90;
+  border-color: #3098d8;
+  color: #e0f4ff;
   cursor: pointer;
   font-weight: 700;
+  box-shadow: 3px 3px 0 0 #05101a;
+  transition: box-shadow 0.05s, transform 0.05s;
+}
+
+button:active {
+  box-shadow: 1px 1px 0 0 #05101a;
+  transform: translate(2px, 2px);
 }
 
 button.ghost {
-  background: #edf5fa;
-  color: #1d4d69;
-  border-color: #bfd5e3;
+  background: #0f2840;
+  color: #a0d0f0;
+  border-color: #2a5878;
+  box-shadow: 3px 3px 0 0 #05101a;
 }
 
 button.active {
-  background: #0d3650;
-  border-color: #0d3650;
+  background: #1278b0;
+  border-color: #28c0f0;
+  color: #d8f8ff;
+  box-shadow: 3px 3px 0 0 #05101a;
+}
+
+input,
+select {
+  background: #162434;
+  color: #c0dcf0;
+  border-color: #2a5878;
+}
+
+input:focus,
+select:focus {
+  outline: none;
+  border-color: #3098d8;
 }
 
 label {
   display: grid;
   gap: 4px;
   font-size: 12px;
-  color: #3b5e72;
+  color: #80c0e0;
 }
 
-.character p {
-  margin: 6px 0;
+/* ===== CHARACTER ===== */
+.character {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 14px;
+  align-items: center;
+}
+
+.character > .row,
+.character > .items {
+  grid-column: 1 / -1;
+}
+
+.character-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.character-info p {
+  margin: 0;
   font-size: 13px;
+  color: #b8dcf4;
 }
 
-.character p.character-emoji {
-  font-size: 60px;
-  text-align: center;
-  margin: 4px 0 8px;
-}
-
+/* ===== ITEM LIST ===== */
 .items {
   margin: 8px 0 0;
-  padding-left: 18px;
+  padding-left: 16px;
 }
 
 .items li {
@@ -119,13 +172,14 @@ label {
 }
 
 .items .locked {
-  color: #73889b;
+  color: #6090b0;
 }
 
 .items .ok {
-  color: #0b6d4e;
+  color: #00e080;
 }
 
+/* ===== TAG LIST ===== */
 .tag-list {
   display: flex;
   flex-wrap: wrap;
@@ -133,48 +187,52 @@ label {
 }
 
 .tag {
-  font-size: 12px;
-  padding: 6px 8px;
+  font-size: 11px;
+  padding: 5px 8px;
 }
 
 .tag.active {
-  background: #0f496b;
-  border-color: #0f496b;
+  background: #1270a0;
+  border-color: #28c0f0;
+  color: #d8f8ff;
 }
 
+/* ===== CONTRIBUTION GRID ===== */
 .contrib {
   display: grid;
   grid-template-columns: repeat(28, 1fr);
-  gap: 4px;
+  gap: 3px;
 }
 
 .cell {
   width: 100%;
   aspect-ratio: 1 / 1;
-  border-radius: 4px;
-  background: #edf2f6;
+  border-radius: 0;
+  background: #162840;
+  border: 1px solid #0f2035;
 }
 
 .cell.i1 {
-  background: #c0e9d7;
+  background: #006840;
 }
 
 .cell.i2 {
-  background: #8ad8b9;
+  background: #009858;
 }
 
 .cell.i3 {
-  background: #4fbf92;
+  background: #00c870;
 }
 
 .cell.i4 {
-  background: #179069;
+  background: #00f888;
 }
 
 .cell.stuck {
-  box-shadow: inset 0 0 0 2px #cb3d54;
+  box-shadow: inset 0 0 0 2px #e03858;
 }
 
+/* ===== INSIGHT GRID ===== */
 .insight-grid {
   display: grid;
   gap: 12px;
@@ -182,13 +240,16 @@ label {
 }
 
 .metric {
-  margin: 0;
-  font-size: 28px;
-  font-weight: 900;
-  color: #0d354c;
+  margin: 6px 0 0;
+  font-family: "Press Start 2P", monospace;
+  font-size: 26px;
+  font-weight: 400;
+  color: #f8e040;
   letter-spacing: -0.02em;
+  text-shadow: 2px 2px 0 #806000, 3px 3px 0 #05101a;
 }
 
+/* ===== LAYOUT HELPERS ===== */
 .row {
   display: flex;
   gap: 8px;
@@ -203,50 +264,100 @@ label {
   justify-content: space-between;
 }
 
-.timeline-list {
+/* ===== TIMELINE LIST ===== */
+.timeline-list,
+.calendar-list {
   display: grid;
   gap: 8px;
+  max-height: 300px;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
+.timeline-list::-webkit-scrollbar,
+.calendar-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.timeline-list::-webkit-scrollbar-track,
+.calendar-list::-webkit-scrollbar-track {
+  background: #0f2035;
+}
+
+.timeline-list::-webkit-scrollbar-thumb,
+.calendar-list::-webkit-scrollbar-thumb {
+  background: #2a6090;
+  border-radius: 0;
+}
+
+/* ===== MEMO CARD ===== */
 .memo-card {
-  border: 1px solid #d4e4ef;
-  border-radius: 10px;
+  border: 2px solid #2a5878;
+  border-radius: 0;
   padding: 10px;
+  background: #162840;
 }
 
 .memo-card p {
   margin: 6px 0;
   font-size: 13px;
+  color: #d0e8f8;
+}
+
+.memo-content.collapsed {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.expand-toggle {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 2px 0 4px;
+  font-size: 11px;
+  color: #50c0e0;
+  cursor: pointer;
+  font-weight: 700;
+  box-shadow: none;
+}
+
+.expand-toggle:active {
+  transform: none;
+  box-shadow: none;
 }
 
 .meta {
-  color: #3f6073;
-  font-size: 12px;
+  color: #70aed0;
+  font-size: 11px;
+  font-family: "Noto Sans JP", monospace;
+  line-height: 1.6;
 }
 
 .pill {
-  border: 1px solid #c2d9e7;
-  border-radius: 999px;
-  padding: 2px 8px;
+  border: 1px solid #2a6090;
+  border-radius: 0;
+  padding: 2px 7px;
   font-size: 11px;
-  color: #29536d;
+  color: #80c8e8;
+  background: #162840;
 }
 
-.calendar-list {
-  display: grid;
-  gap: 8px;
-}
-
+/* ===== CALENDAR ROW ===== */
 .calendar-row {
-  border: 1px solid #d4e4ef;
-  border-radius: 10px;
+  border: 2px solid #2a5878;
+  border-radius: 0;
   padding: 8px 10px;
+  background: #162840;
   display: grid;
   grid-template-columns: 1fr repeat(3, auto);
   gap: 10px;
   font-size: 13px;
+  color: #c8e0f4;
 }
 
+/* ===== BLOG DRAFT ===== */
 .draft-form {
   display: grid;
   gap: 8px;
@@ -258,32 +369,40 @@ label {
   white-space: pre-wrap;
   max-height: 360px;
   overflow: auto;
-  background: #0e2433;
-  color: #d4e9f8;
-  border-radius: 10px;
+  background: #0a1420;
+  color: #50e888;
+  border-radius: 0;
+  border: 2px solid #225070;
   padding: 10px;
   font-size: 12px;
+  font-family: "Courier New", "Noto Sans JP", monospace;
+  line-height: 1.7;
 }
 
+/* ===== STATUS COLORS ===== */
 .warn {
-  background: #a43c56;
-  border-color: #a43c56;
+  background: #901828;
+  border-color: #e03858;
+  color: #ffd0dc;
 }
 
 .ok {
-  background: #1c7552;
-  border-color: #1c7552;
+  background: #0c6038;
+  border-color: #00d870;
+  color: #c0ffe0;
 }
 
 .error {
   margin: 12px 0 0;
-  background: #fbe8ed;
-  border: 1px solid #f1c2ce;
-  color: #a02d44;
-  border-radius: 10px;
+  background: #280610;
+  border: 2px solid #e03858;
+  color: #ff90a8;
+  border-radius: 0;
   padding: 10px;
+  font-size: 12px;
 }
 
+/* ===== RESPONSIVE ===== */
 @media (max-width: 1100px) {
   .layout {
     grid-template-columns: 1fr;
