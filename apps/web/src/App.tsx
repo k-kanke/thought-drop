@@ -115,7 +115,14 @@ function App() {
   const [blogDraft, setBlogDraft] = useState('')
   const [blogLoading, setBlogLoading] = useState(false)
 
-  // Chat UI is not used on web frontend (removed)
+  // --- Insight Chatbot ---
+  type InsightMessage = { role: 'user' | 'assistant'; content: string }
+  const [insightMessages, setInsightMessages] = useState<InsightMessage[]>([])
+  const [insightInput, setInsightInput] = useState('')
+  const [insightLoading, setInsightLoading] = useState(false)
+  const [insightError, setInsightError] = useState<string | null>(null)
+  const [insightFrom, setInsightFrom] = useState(range.from)
+  const [insightTo, setInsightTo] = useState(range.to)
 
   const fetchDashboard = useCallback(async (): Promise<void> => {
     setLoading(true)
@@ -265,7 +272,79 @@ function App() {
     }
   }
 
-  // sendChat removed
+  async function sendInsight(event: FormEvent): Promise<void> {
+    event.preventDefault()
+    setInsightLoading(true)
+    setInsightError(null)
+
+    const question = insightInput.trim()
+    const userLabel = question || `${insightFrom} 〜 ${insightTo} のインサイト分析`
+    setInsightMessages((prev) => [...prev, { role: 'user', content: userLabel }])
+    setInsightInput('')
+
+    try {
+      const response = await fetch(`${apiBase}/api/ai/insight/stream`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ from: insightFrom, to: insightTo, question: question || undefined }),
+      })
+
+      // Handle JSON error response (e.g. no memos)
+      const contentType = response.headers.get('content-type') || ''
+      if (contentType.includes('application/json')) {
+        const data = await response.json()
+        if (data.error) {
+          setInsightMessages((prev) => [...prev, { role: 'assistant', content: data.error }])
+          return
+        }
+      }
+
+      if (!response.ok || !response.body) throw new Error(`insight stream failed: ${response.status}`)
+
+      setInsightMessages((prev) => [...prev, { role: 'assistant', content: '' }])
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buf = ''
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buf += decoder.decode(value, { stream: true })
+
+        let idx
+        while ((idx = buf.indexOf('\n\n')) !== -1) {
+          const chunk = buf.slice(0, idx)
+          buf = buf.slice(idx + 2)
+          const lines = chunk.split('\n').map((l) => l.trim())
+          for (const line of lines) {
+            if (!line.startsWith('data:')) continue
+            const payload = line.slice(5).trim()
+            if (!payload || payload === '[DONE]') continue
+            try {
+              const json = JSON.parse(payload) as { delta?: string }
+              if (json.delta) {
+                setInsightMessages((prev) => {
+                  const last = prev[prev.length - 1]
+                  if (!last || last.role !== 'assistant') return prev
+                  const updated = [...prev]
+                  updated[updated.length - 1] = { ...last, content: last.content + json.delta }
+                  return updated
+                })
+              }
+            } catch {
+              // ignore parse errors
+            }
+          }
+        }
+      }
+    } catch (unknownError) {
+      const detail = unknownError instanceof Error ? unknownError.message : String(unknownError)
+      setInsightError(detail)
+    } finally {
+      setInsightLoading(false)
+    }
+  }
 
   const insightTopStuck = summary?.top_stuck?.content ?? '該当なし'
 
@@ -502,6 +581,43 @@ function App() {
       </section>
 
       {error ? <p className="error">エラー: {error}</p> : null}
+
+      <section className="panel insight-chat-panel">
+        <h2>インサイト・チャットボット</h2>
+        <p className="insight-desc">期間を選択して「フィードを生成」を押すと、メモからトレンドや示唆を生成します。</p>
+        <form className="insight-form" onSubmit={(e) => void sendInsight(e)}>
+          <label>
+            開始
+            <input type="date" value={insightFrom} onChange={(e) => setInsightFrom(e.currentTarget.value)} />
+          </label>
+          <label>
+            終了
+            <input type="date" value={insightTo} onChange={(e) => setInsightTo(e.currentTarget.value)} />
+          </label>
+          <input
+            value={insightInput}
+            onChange={(e) => setInsightInput(e.currentTarget.value)}
+            placeholder="追加の質問（任意）..."
+            style={{ flex: 1 }}
+          />
+          <button type="submit" disabled={insightLoading}>
+            {insightLoading ? '生成中...' : 'フィードを生成'}
+          </button>
+        </form>
+        <div className="insight-messages">
+          {insightMessages.length === 0 ? (
+            <p className="insight-placeholder">期間を選択して分析を開始してください。メモの傾向やパターンをAIが読み解きます。</p>
+          ) : insightMessages.map((m, idx) => (
+            <div key={idx} className="insight-msg">
+              <strong className={m.role === 'user' ? 'insight-role-user' : 'insight-role-assistant'}>
+                {m.role === 'user' ? 'You' : 'Insight Bot'}
+              </strong>
+              <div style={{ whiteSpace: 'pre-wrap' }}>{m.content}</div>
+            </div>
+          ))}
+        </div>
+        {insightError ? <p className="error">インサイトエラー: {insightError}</p> : null}
+      </section>
     </div>
   )
 }

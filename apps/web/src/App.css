@@ -477,6 +477,74 @@ button.danger:hover {
   font-size: 12px;
 }
 
+/* ===== INSIGHT CHATBOT ===== */
+.insight-chat-panel {
+  margin-top: 12px;
+}
+
+.insight-desc {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: #80c0e0;
+}
+
+.insight-form {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.insight-form label {
+  font-size: 11px;
+  color: #80c0e0;
+}
+
+.insight-form input[type="date"] {
+  width: 140px;
+}
+
+.insight-messages {
+  border: 2px solid #2a5878;
+  background: #0a1420;
+  padding: 10px;
+  max-height: 400px;
+  overflow-y: auto;
+  color: #d0e8f8;
+  font-size: 13px;
+}
+
+.insight-messages::-webkit-scrollbar {
+  width: 4px;
+}
+
+.insight-messages::-webkit-scrollbar-track {
+  background: #0f2035;
+}
+
+.insight-messages::-webkit-scrollbar-thumb {
+  background: #2a6090;
+}
+
+.insight-placeholder {
+  color: #80c0e0;
+  margin: 0;
+  font-style: italic;
+}
+
+.insight-msg {
+  margin: 8px 0;
+}
+
+.insight-role-user {
+  color: #f8e040;
+}
+
+.insight-role-assistant {
+  color: #5ad0f8;
+}
+
 /* ===== RESPONSIVE ===== */
 @media (max-width: 1100px) {
   .layout {
