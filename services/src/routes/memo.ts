@@ -26,6 +26,7 @@ type QueryFilterInput = {
   from: string | null;
   to: string | null;
   tag: string;
+  q: string;
 };
 
 const EXT_BY_MIME: Record<string, string> = {
@@ -230,6 +231,11 @@ function buildMemoFilters(input: QueryFilterInput): { whereSql: string; params: 
     params.push(input.tag);
   }
 
+  if (input.q) {
+    whereClauses.push('m.content LIKE ?');
+    params.push(`%${input.q}%`);
+  }
+
   return {
     whereSql: whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '',
     params,
@@ -432,6 +438,7 @@ router.get('/timeline', (req: Request, res: Response) => {
   const from = parseDateFilter(req.query.from, 'from');
   const to = parseDateFilter(req.query.to, 'to');
   const tag = typeof req.query.tag === 'string' ? normalizeTagName(req.query.tag) : '';
+  const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
 
   if (resolved === null) {
     res.status(400).json({ error: 'resolved must be one of 0, 1, true, false' });
@@ -450,7 +457,7 @@ router.get('/timeline', (req: Request, res: Response) => {
     return;
   }
 
-  const { whereSql, params } = buildMemoFilters({ status, resolved, from, to, tag });
+  const { whereSql, params } = buildMemoFilters({ status, resolved, from, to, tag, q });
 
   if (view === 'calendar') {
     const days = db.prepare(`
@@ -540,7 +547,7 @@ router.get('/', (req: Request, res: Response) => {
     return;
   }
 
-  const { whereSql, params } = buildMemoFilters({ status, resolved, from, to, tag });
+  const { whereSql, params } = buildMemoFilters({ status, resolved, from, to, tag, q: '' });
   const rows = db.prepare(`
     SELECT
       m.id, m.content, m.status, m.sent_to_slack, m.resolved, m.created_at, m.mode, m.stuck_minutes,
@@ -610,6 +617,37 @@ router.patch('/:id/resolve', (req: Request, res: Response) => {
   }
 
   res.status(200).json({ id, resolved: nextResolved });
+});
+
+router.delete('/:id', (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: 'Invalid memo id' });
+    return;
+  }
+
+  const memo = db.prepare(`
+    SELECT id, status, resolved, created_at
+    FROM memos
+    WHERE id = ?
+  `).get(id) as { id: number; status: string | null; resolved: number; created_at: string } | undefined;
+
+  if (!memo) {
+    res.status(404).json({ error: 'Memo not found' });
+    return;
+  }
+
+  db.prepare('DELETE FROM memos WHERE id = ?').run(id);
+
+  const dateJst = toJstDateString(memo.created_at);
+  updateDailyStats(
+    dateJst,
+    -1,
+    memo.status === '詰まり' ? -1 : 0,
+    memo.resolved === 1 ? -1 : 0,
+  );
+
+  res.status(200).json({ id });
 });
 
 router.post('/:id/tags', (req: Request, res: Response) => {

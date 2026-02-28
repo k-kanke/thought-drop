@@ -328,7 +328,9 @@ label {
   border: 2px solid #2a5878;
   border-radius: 0;
   padding: 10px;
+  padding-bottom: 32px;
   background: #162840;
+  position: relative;
 }
 
 /* Uniform card size in 3-column board */
@@ -448,6 +450,21 @@ label {
   background: #0c6038;
   border-color: #00d870;
   color: #c0ffe0;
+}
+
+button.danger {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  background: transparent;
+  border-color: #444;
+  color: #666;
+  font-size: 0.7rem;
+  padding: 2px 6px;
+}
+button.danger:hover {
+  border-color: #e03858;
+  color: #ffd0dc;
 }
 
 .error {
