@@ -168,11 +168,12 @@ body {
   position: absolute;
   left: calc(100% + 10px);
   top: 4px;
-  width: 152px;
-  border-radius: 14px;
-  background: #ffffff;
-  border: 1px solid #d4e0ef;
-  box-shadow: 0 10px 22px rgba(16, 38, 61, 0.2);
+  width: 168px;
+  border-radius: 0;
+  background: #162840;
+  border: 2px solid #2a6090;
+  box-shadow: 4px 4px 0 0 #05101a;
+  color: #cce4f4;
   padding: 10px;
   z-index: 30;
 }
@@ -182,11 +183,12 @@ body {
   left: calc(100% + 10px);
   top: auto;
   bottom: 0;
-  width: 184px;
-  border-radius: 14px;
-  background: #ffffff;
-  border: 1px solid #d4e0ef;
-  box-shadow: 0 10px 22px rgba(16, 38, 61, 0.2);
+  width: 200px;
+  border-radius: 0;
+  background: #162840;
+  border: 2px solid #2a6090;
+  box-shadow: 4px 4px 0 0 #05101a;
+  color: #cce4f4;
   padding: 8px 10px;
   z-index: 31;
   display: flex;
@@ -202,9 +204,9 @@ body {
   width: 12px;
   height: 12px;
   transform: rotate(45deg);
-  background: #ffffff;
-  border-left: 1px solid #d4e0ef;
-  border-bottom: 1px solid #d4e0ef;
+  background: #162840;
+  border-left: 2px solid #2a6090;
+  border-bottom: 2px solid #2a6090;
 }
 
 .timer-bubble::before {
@@ -216,16 +218,16 @@ body {
   width: 12px;
   height: 12px;
   transform: rotate(45deg);
-  background: #ffffff;
-  border-left: 1px solid #d4e0ef;
-  border-bottom: 1px solid #d4e0ef;
+  background: #162840;
+  border-left: 2px solid #2a6090;
+  border-bottom: 2px solid #2a6090;
 }
 
 .reminder-bubble p {
   margin: 0;
   font-size: 12px;
   font-weight: 700;
-  color: #233654;
+  color: #cce4f4;
   line-height: 1.35;
 }
 
@@ -233,20 +235,20 @@ body {
   margin: 0;
   font-size: 12px;
   font-weight: 700;
-  color: #233654;
+  color: #cce4f4;
   line-height: 1.35;
   flex: 1;
 }
 
 .timer-ok {
-  border: 1px solid #c4d5eb;
-  border-radius: 8px;
-  background: #f5f9ff;
-  color: #23416a;
+  border: 2px solid #3098d8;
+  border-radius: 0;
+  background: #1a5a90;
+  color: #e0f4ff;
   font-family: inherit;
   font-size: 11px;
   font-weight: 700;
-  padding: 4px 8px;
+  padding: 6px 8px;
   cursor: pointer;
   flex-shrink: 0;
 }
@@ -258,10 +260,10 @@ body {
 }
 
 .reminder-actions button {
-  border: 1px solid #c4d5eb;
-  border-radius: 8px;
-  background: #f5f9ff;
-  color: #23416a;
+  border: 2px solid #2a5878;
+  border-radius: 0;
+  background: #0f2035;
+  color: #a0d0f0;
   font-family: inherit;
   font-size: 11px;
   font-weight: 700;
@@ -270,9 +272,9 @@ body {
 }
 
 .reminder-actions button:first-child {
-  background: linear-gradient(140deg, #1f6fff, #3fbcff);
-  border-color: transparent;
-  color: #ffffff;
+  background: #1a5a90;
+  border-color: #3098d8;
+  color: #e0f4ff;
 }
 
 .reminder-actions button:hover {
@@ -281,16 +283,13 @@ body {
 
 .panel {
   width: 344px;
-  border-radius: 22px;
-  padding: 14px;
+  border-radius: 0;
+  padding: 16px;
   box-sizing: border-box;
-  color: var(--ink);
-  background:
-    linear-gradient(150deg, rgba(255, 255, 255, 0.95), rgba(235, 245, 255, 0.82)),
-    radial-gradient(circle at top right, rgba(64, 182, 255, 0.26), rgba(255, 255, 255, 0));
-  border: 1px solid rgba(255, 255, 255, 0.8);
-  box-shadow: 0 20px 42px rgba(18, 38, 59, 0.28);
-  backdrop-filter: blur(12px);
+  color: #cce4f4;
+  background: #162840;
+  border: 3px solid #2a6090;
+  box-shadow: 4px 4px 0 0 #05101a;
   animation: reveal 180ms ease-out;
 }
 
@@ -299,7 +298,8 @@ body {
 }
 
 .panel-header {
-  margin-bottom: 8px;
+  margin-bottom: 10px;
+  color: #f0f8ff;
 }
 
 .title-row {
@@ -316,10 +316,10 @@ body {
 }
 
 .agent-switch {
-  border: 1px solid #c5d9f1;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.88);
-  color: #27456e;
+  border: 2px solid #3098d8;
+  border-radius: 0;
+  background: #1a5a90;
+  color: #e0f4ff;
   font-family: inherit;
   font-size: 11px;
   font-weight: 700;
@@ -330,12 +330,13 @@ body {
   gap: 6px;
   cursor: pointer;
   -webkit-app-region: no-drag;
+  box-shadow: 3px 3px 0 0 #05101a;
 }
 
 .agent-switch.active {
-  border-color: transparent;
-  background: linear-gradient(130deg, var(--accent), var(--accent-2));
-  color: #fff;
+  border-color: #28c0f0;
+  background: #1278b0;
+  color: #d8f8ff;
 }
 
 .agent-switch-icon {
@@ -370,7 +371,7 @@ h1 {
 }
 
 .field {
-  margin-top: 8px;
+  margin-top: 10px;
 }
 
 .memo-field {
@@ -388,8 +389,8 @@ label,
   display: block;
   margin-bottom: 5px;
   font-size: 12px;
-  color: var(--muted);
-  font-weight: 600;
+  color: #80c0e0;
+  font-weight: 700;
 }
 
 .memo-head label {
@@ -399,20 +400,19 @@ label,
 input,
 textarea {
   width: 100%;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 9px 11px;
+  border: 2px solid #2a5878;
+  border-radius: 0;
+  padding: 10px 12px;
   box-sizing: border-box;
   font-family: inherit;
-  color: inherit;
-  background: rgba(255, 255, 255, 0.9);
-  transition: border-color 140ms ease, box-shadow 140ms ease;
+  font-size: 13px;
+  color: #cfe8ff;
+  background: #162434;
 }
 
 input:focus,
 textarea:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(31, 111, 255, 0.16);
+  border-color: #3098d8;
   outline: none;
 }
 
@@ -422,11 +422,11 @@ textarea:focus {
 
 .status-trigger {
   width: 100%;
-  border: 1px solid var(--line);
-  border-radius: 12px;
+  border: 2px solid #2a5878;
+  border-radius: 0;
   padding: 9px 11px;
-  background: rgba(255, 255, 255, 0.9);
-  color: #2b466d;
+  background: #162434;
+  color: #c0dcf0;
   font-family: inherit;
   font-size: 13px;
   font-weight: 700;
@@ -450,20 +450,20 @@ textarea:focus {
   left: 0;
   right: 0;
   z-index: 10;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.98);
-  box-shadow: 0 10px 24px rgba(18, 38, 59, 0.2);
+  border: 2px solid #2a5878;
+  border-radius: 0;
+  background: #0f2035;
+  box-shadow: 4px 4px 0 0 #05101a;
   padding: 4px;
   display: grid;
   gap: 4px;
 }
 
 .status-option {
-  border: 0;
-  border-radius: 8px;
+  border: 2px solid transparent;
+  border-radius: 0;
   background: transparent;
-  color: #2b466d;
+  color: #a0d0f0;
   padding: 8px 9px;
   text-align: left;
   font-family: inherit;
@@ -473,16 +473,18 @@ textarea:focus {
 }
 
 .status-option:hover {
-  background: #edf4ff;
+  border-color: #2a5878;
+  background: #162840;
 }
 
 .status-option.active {
-  background: linear-gradient(130deg, var(--accent), var(--accent-2));
-  color: #fff;
+  border-color: #3098d8;
+  background: #1a5a90;
+  color: #e0f4ff;
 }
 
 textarea {
-  min-height: 124px;
+  min-height: 140px;
   resize: none;
 }
 
@@ -496,18 +498,16 @@ textarea {
   align-items: center;
   min-width: 42px;
   height: 34px;
-  border: 1px solid #d4e0f3;
-  border-radius: 8px;
-  background: linear-gradient(180deg, #ffffff, #edf4ff);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.95),
-    0 6px 14px rgba(25, 58, 94, 0.1);
+  border: 2px solid #2a5878;
+  border-radius: 0;
+  background: #0f2035;
+  box-shadow: none;
 }
 
 .clock-pill.active {
   width: 138px;
-  background: linear-gradient(180deg, #f8fbff, #e8f1ff);
-  border-color: #9dbce8;
+  background: #162840;
+  border-color: #3098d8;
 }
 
 .pause-inline {
@@ -560,6 +560,7 @@ textarea {
   letter-spacing: 0;
   margin-left: 0;
   font-size: 11px;
+  color: #cce4f4;
 }
 
 .clock-icon {
@@ -572,7 +573,7 @@ textarea {
 .clock-icon-ring {
   position: absolute;
   inset: 0;
-  border: 1.6px solid #2f5d91;
+  border: 1.6px solid #2a6090;
   border-radius: 50%;
   box-sizing: border-box;
 }
@@ -582,7 +583,7 @@ textarea {
   left: 50%;
   bottom: 50%;
   width: 1.5px;
-  background: #2f5d91;
+  background: #3098d8;
   border-radius: 2px;
   transform-origin: center bottom;
 }
@@ -602,10 +603,10 @@ textarea {
   top: calc(100% + 6px);
   right: 0;
   width: 224px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.98);
-  box-shadow: 0 10px 24px rgba(18, 38, 59, 0.2);
+  border: 2px solid #2a5878;
+  border-radius: 0;
+  background: #0f2035;
+  box-shadow: 4px 4px 0 0 #05101a;
   padding: 8px;
   z-index: 25;
 }
@@ -617,10 +618,10 @@ textarea {
 }
 
 .clock-mode-buttons button {
-  border: 1px solid #c4d5eb;
-  border-radius: 8px;
-  background: #f7fbff;
-  color: #2b466d;
+  border: 2px solid #2a5878;
+  border-radius: 0;
+  background: #0f2035;
+  color: #a0d0f0;
   font-family: inherit;
   font-size: 11px;
   font-weight: 700;
@@ -629,23 +630,24 @@ textarea {
 }
 
 .clock-mode-buttons button.active {
-  border-color: transparent;
-  background: linear-gradient(130deg, var(--accent), var(--accent-2));
-  color: #fff;
+  border-color: #3098d8;
+  background: #1a5a90;
+  color: #e0f4ff;
 }
 
 .clock-start {
   margin-top: 8px;
   width: 100%;
-  border: 0;
-  border-radius: 8px;
+  border: 2px solid #3098d8;
+  border-radius: 0;
   height: 32px;
-  background: linear-gradient(140deg, #1f6fff, #3fbcff);
-  color: #fff;
+  background: #1a5a90;
+  color: #e0f4ff;
   font-family: inherit;
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
+  box-shadow: 3px 3px 0 0 #05101a;
 }
 
 .clock-start:disabled {
@@ -656,11 +658,11 @@ textarea {
 .clock-reset {
   margin-top: 6px;
   width: 100%;
-  border: 1px solid #c4d5eb;
-  border-radius: 8px;
+  border: 2px solid #2a5878;
+  border-radius: 0;
   height: 30px;
-  background: #f7fbff;
-  color: #2b466d;
+  background: #0f2035;
+  color: #a0d0f0;
   font-family: inherit;
   font-size: 11px;
   font-weight: 700;
@@ -676,7 +678,7 @@ textarea {
 
 .timer-inputs label {
   margin: 0;
-  color: #36557c;
+  color: #80c0e0;
   font-size: 12px;
   font-weight: 700;
   display: flex;
@@ -687,10 +689,12 @@ textarea {
 .timer-inputs input {
   width: 36px;
   height: 26px;
-  border-radius: 8px;
-  border: 1px solid #c4d5eb;
+  border-radius: 0;
+  border: 2px solid #2a5878;
   padding: 0 4px;
   font-size: 12px;
+  background: #162434;
+  color: #c0dcf0;
   text-align: center;
 }
 
@@ -723,7 +727,7 @@ textarea {
 
 .pomodoro-inputs label {
   margin: 0;
-  color: #36557c;
+  color: #80c0e0;
   font-size: 11px;
   font-weight: 700;
   display: flex;
@@ -734,10 +738,12 @@ textarea {
 .pomodoro-inputs input {
   width: 36px;
   height: 24px;
-  border-radius: 8px;
-  border: 1px solid #c4d5eb;
+  border-radius: 0;
+  border: 2px solid #2a5878;
   padding: 0 4px;
   font-size: 11px;
+  background: #162434;
+  color: #c0dcf0;
   text-align: center;
 }
 
@@ -752,29 +758,30 @@ textarea {
 .counter {
   margin: 0;
   font-size: 12px;
-  color: var(--muted);
+  color: #80c0e0;
 }
 
 .send {
-  border: 0;
-  border-radius: 12px;
+  border: 2px solid #3098d8;
+  border-radius: 0;
   padding: 10px 16px;
   font-family: inherit;
   font-size: 13px;
   font-weight: 700;
-  color: #fff;
+  color: #e0f4ff;
   cursor: pointer;
-  background: linear-gradient(140deg, #1f6fff, #3fbcff);
-  box-shadow: 0 10px 20px rgba(31, 111, 255, 0.32);
+  background: #1a5a90;
+  box-shadow: 3px 3px 0 0 #05101a;
 }
 
 .send:hover {
-  transform: translateY(-1px);
+  filter: brightness(1.05);
 }
 
 .send.secondary {
-  background: linear-gradient(140deg, #8aa2c8, #6f8cb8);
-  box-shadow: 0 10px 20px rgba(66, 93, 136, 0.24);
+  border-color: #2a5878;
+  background: #0f2840;
+  color: #a0d0f0;
 }
 
 .send:disabled {
@@ -788,37 +795,50 @@ textarea {
   font-weight: 600;
 }
 
-.message.ok {
-  color: #146b44;
-}
-
-.message.error {
-  color: var(--danger);
-}
+.message.ok { color: #00d870; }
+.message.error { color: #ff90a8; }
 
 .agent-screen {
   margin-top: 8px;
-  /* Match memo mode height feel */
-  min-height: 340px;
-  border-radius: 16px;
-  border: 1px dashed #c9d9ef;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.76), rgba(235, 245, 255, 0.56));
+  height: 360px;
+  border-radius: 0;
+  border: 3px solid #2a6090;
+  background: #162840;
+  box-shadow: 4px 4px 0 0 #05101a;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  color: #cce4f4;
+  position: relative;
+}
+.agent-screen::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.03),
+    rgba(255, 255, 255, 0.03) 1px,
+    transparent 1px,
+    transparent 3px
+  );
 }
 
 .agent-canvas {
   flex: 1;
-  padding: 10px;
+  padding: 12px;
   overflow: auto;
 }
+.agent-canvas::-webkit-scrollbar { width: 6px; }
+.agent-canvas::-webkit-scrollbar-track { background: #0f2035; }
+.agent-canvas::-webkit-scrollbar-thumb { background: #2a6090; }
 
 .agent-ui-note {
   margin: 0;
   font-size: 12px;
   font-weight: 700;
-  color: #2a4b73;
+  color: #80c0e0;
 }
 
 .agent-messages {
@@ -827,78 +847,94 @@ textarea {
 }
 
 .agent-message {
-  border-radius: 10px;
+  border: 2px solid #2a5878;
+  border-radius: 0;
   padding: 8px 10px;
   font-size: 12px;
-  line-height: 1.4;
+  line-height: 1.6;
   white-space: pre-wrap;
   max-width: 88%;
   position: relative;
+  background: #162840;
+  color: #d0e8f8;
 }
 
 .agent-message.user {
-  background: #edf4ff;
-  color: #27456e;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.96), rgba(248,250,252,0.94)),
+    repeating-linear-gradient(45deg, rgba(0,0,0,0.02) 0 2px, transparent 2px 4px),
+    #ffffff;
+  color: #141a23;
+  border-color: #c9d7e6;
   justify-self: end;
-  border-top-right-radius: 2px;
-  box-shadow: 0 6px 16px rgba(30, 86, 160, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.8), inset 0 -1px 0 rgba(0,0,0,0.06);
+  text-shadow: none;
 }
 
 .agent-message.assistant {
-  background: #ffffff;
-  border: 1px solid #d9e5f6;
-  color: #1f3554;
+  background:
+    linear-gradient(180deg, #10273f 0%, #0c1e31 100%),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.03) 0 1px, transparent 1px 3px),
+    #162840;
+  border: 2px solid #2a5878;
+  color: #d6ecff;
   justify-self: start;
-  border-radius: 10px;
-  box-shadow: 0 6px 16px rgba(21, 36, 60, 0.08);
-  margin-left: 30px; /* more space for avatar and tail */
-  position: relative;
-  z-index: 1;
+  border-radius: 0;
+  box-shadow: inset 3px 0 0 #2a6090, inset 0 1px 0 rgba(255,255,255,0.04);
+  text-shadow: 0 1px 0 rgba(0,0,0,0.35);
 }
 
-/* rounded speech bubble tail (single rotated square to avoid seams) */
-.agent-message.assistant::after {
-  content: '';
-  position: absolute;
-  left: -8px; /* slightly underlap bubble border */
-  top: 18px;  /* align with avatar */
-  width: 12px;
-  height: 12px;
-  background: #ffffff;
-  border: 1px solid #d9e5f6;
-  border-radius: 2px;
-  transform: rotate(45deg);
-  z-index: 0;
+/* System message: no box, plain white text */
+.agent-message.system {
+  background: transparent;
+  border: 0;
+  color: #e8f0ff;
+  box-shadow: none;
+  padding: 0;
+  margin: 4px 0;
+  max-width: 100%;
 }
 
-.agent-avatar {
-  position: absolute;
-  left: -28px;
-  top: 8px;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: #eaf2ff;
-  border: 1px solid #d9e5f6;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 13px;
-  line-height: 1;
-  box-shadow: 0 2px 6px rgba(21, 36, 60, 0.08);
-  z-index: 2;
+/* Assistant message as plain text (no box) */
+.agent-screen .agent-message.assistant {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  padding: 0;
+  margin: 4px 0;
+  color: #e8f0ff;
+  text-shadow: none;
+  max-width: 100%;
 }
+
+/* Typing indicator: dots only (no box, no tail) */
+.agent-screen .agent-typing {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  margin-left: 0 !important;
+}
+.agent-screen .agent-typing::before,
+.agent-screen .agent-typing::after {
+  content: none !important;
+  display: none !important;
+}
+
+/* no tails */
+
+/* removed avatar */
 
 .agent-error {
   margin: 8px 0 0;
   font-size: 11px;
   font-weight: 700;
-  color: #b42346;
+  color: #ff90a8;
 }
 
 .agent-composer {
-  border-top: 1px solid #d7e4f6;
-  background: rgba(255, 255, 255, 0.88);
+  border-top: 2px solid #2a6090;
+  background: #0f2035;
   padding: 8px;
   display: flex;
   align-items: center;
@@ -909,17 +945,17 @@ textarea {
 .agent-typing {
   justify-self: start;
   position: relative;
-  margin-left: 30px; /* space for avatar */
-  background: #ffffff;
-  border: 1px solid #d9e5f6;
-  color: #6b87ab;
-  border-radius: 10px;
-  padding: 8px 10px 8px 10px;
-  font-size: 12px;
+  margin-left: 0;
+  background: #0a1420;
+  border: 2px solid #2a5878;
+  color: #50c0e0;
+  border-radius: 0;
+  padding: 8px 10px;
+  font-size: 13px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  box-shadow: 0 6px 16px rgba(21, 36, 60, 0.06);
+  box-shadow: none;
 }
 
 /* rounded tail for typing indicator */
@@ -937,11 +973,11 @@ textarea {
 }
 
 .agent-typing .dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #8da6c6;
-  opacity: 0.6;
+  width: 7px;
+  height: 7px;
+  border-radius: 0;
+  background: #50c0e0;
+  opacity: 0.8;
   animation: blink 1.2s infinite ease-in-out;
 }
 
@@ -953,6 +989,18 @@ textarea {
   40% { opacity: 1; transform: translateY(-2px); }
 }
 
+/* Scoped override: make user message retro in agent screen without blue */
+.agent-screen .agent-message.user {
+  background:
+    linear-gradient(180deg, #252b36 0%, #1a2028 100%),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.02) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.015) 0 1px, transparent 1px 3px),
+    #151a22;
+  color: #eaeef6;
+  border-color: #3a4758;
+  box-shadow: inset 3px 0 0 #4a5566, inset 0 1px 0 rgba(255,255,255,0.04);
+}
+
 .agent-plus-wrap {
   position: relative;
 }
@@ -960,15 +1008,16 @@ textarea {
 .agent-plus {
   width: 32px;
   height: 32px;
-  border-radius: 10px;
-  border: 1px solid #c4d5eb;
-  background: #f5f9ff;
-  color: #23416a;
+  border-radius: 0;
+  border: 2px solid #3098d8;
+  background: #1a5a90;
+  color: #e0f4ff;
   font-family: inherit;
   font-size: 18px;
   font-weight: 700;
   line-height: 1;
   cursor: pointer;
+  box-shadow: 3px 3px 0 0 #05101a;
 }
 
 .agent-plus-menu {
@@ -976,10 +1025,10 @@ textarea {
   left: 0;
   bottom: calc(100% + 6px);
   min-width: 168px;
-  border: 1px solid #c9daef;
-  border-radius: 10px;
-  background: #ffffff;
-  box-shadow: 0 10px 20px rgba(20, 47, 74, 0.16);
+  border: 2px solid #2a6090;
+  border-radius: 0;
+  background: #162840;
+  box-shadow: 4px 4px 0 0 #05101a;
   padding: 6px;
   display: grid;
   gap: 4px;
@@ -987,10 +1036,10 @@ textarea {
 }
 
 .agent-plus-menu button {
-  border: 0;
-  border-radius: 8px;
-  background: #f4f9ff;
-  color: #27456e;
+  border: 2px solid #2a5878;
+  border-radius: 0;
+  background: #0f2035;
+  color: #a0d0f0;
   font-family: inherit;
   font-size: 11px;
   font-weight: 700;
@@ -1000,31 +1049,42 @@ textarea {
 }
 
 .agent-plus-menu button:hover {
-  background: #e9f2ff;
+  background: #162840;
 }
 
 .agent-input {
   flex: 1;
   height: 32px;
-  border-radius: 10px;
-  border: 1px solid #c4d5eb;
+  border-radius: 0;
+  border: 2px solid #2a5878;
   padding: 0 10px;
   box-sizing: border-box;
   font-family: inherit;
   font-size: 12px;
+  background: #162434;
+  color: #c0dcf0;
+}
+.agent-input:focus {
+  outline: none;
+  border-color: #3098d8;
 }
 
 .agent-ask {
   height: 32px;
-  border: 0;
-  border-radius: 10px;
+  border: 2px solid #3098d8;
+  border-radius: 0;
   padding: 0 12px;
-  background: linear-gradient(140deg, #1f6fff, #3fbcff);
-  color: #fff;
+  background: #1a5a90;
+  color: #e0f4ff;
   font-family: inherit;
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
+  box-shadow: 3px 3px 0 0 #05101a;
+}
+.agent-ask:active {
+  box-shadow: 1px 1px 0 0 #05101a;
+  transform: translate(2px, 2px);
 }
 
 .agent-ask:disabled {
@@ -1045,33 +1105,7 @@ textarea {
   }
 }
 
-/* ==== Agent message style overrides (no icons, no tails) ==== */
-.agent-message.user {
-  background: linear-gradient(140deg, #1f6fff, #3fbcff);
-  color: #ffffff;
-  border-top-right-radius: 6px;
-  box-shadow: 0 6px 16px rgba(30, 86, 160, 0.20);
-}
-
-.agent-message.assistant {
-  margin-left: 0 !important;
-  position: static !important;
-  z-index: auto !important;
-}
-
-.agent-message.assistant::before,
-.agent-message.assistant::after,
-.agent-typing::before,
-.agent-typing::after {
-  content: none !important;
-  border: 0 !important;
-  width: 0 !important;
-  height: 0 !important;
-}
-
-.agent-typing {
-  margin-left: 0 !important;
-}
+/* removed legacy overrides */
 
 /* === ホバー: ぷるぷる === */
 @keyframes wiggle {

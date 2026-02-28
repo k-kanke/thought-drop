@@ -25,7 +25,7 @@ type TimerNotice = {
 };
 type PanelMode = "memo" | "agent";
 type AgentMessage = {
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "system";
   text: string;
 };
 
