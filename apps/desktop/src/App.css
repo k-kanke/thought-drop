@@ -65,6 +65,9 @@ body {
   position: relative;
 }
 
+/* Reserve space for timer pin when collapsed (icon-only) */
+/* no extra padding; pin sits outside to the right */
+
 .character {
   appearance: none;
   -webkit-appearance: none;
@@ -251,6 +254,30 @@ body {
   padding: 6px 8px;
   cursor: pointer;
   flex-shrink: 0;
+}
+
+/* Small persistent timer near avatar */
+.timer-pin {
+  position: absolute;
+  left: 50%;
+  top: auto;
+  bottom: 100%;
+  transform: translateX(-50%);
+  border: 2px solid #2a6090;
+  background: #0f2035;
+  color: #e0f4ff;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 2px 6px;
+  line-height: 1.4;
+  box-shadow: 3px 3px 0 0 #05101a;
+  z-index: 32;
+  pointer-events: none;
+}
+
+/* Provide headroom when collapsed so the timer pin won't clip */
+.app.collapsed .avatar-area {
+  margin-top: 20px;
 }
 
 .reminder-actions {

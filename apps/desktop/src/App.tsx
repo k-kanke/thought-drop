@@ -819,6 +819,12 @@ function App() {
             </button>
           </aside>
         ) : null}
+        {/* Small timer pin is always visible near avatar while timer/stopwatch/pomodoro is active */}
+        {activeTimeMode && !isOpen ? (
+          <div className="timer-pin" aria-label="timer">
+            {formatElapsed(timeDisplayMs)}
+          </div>
+        ) : null}
         {!timerNotice && reminderVisible && !isOpen ? (
           <aside className="reminder-bubble">
             <p>そろそろ思考をメモする？</p>
