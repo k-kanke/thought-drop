@@ -79,6 +79,50 @@ function App() {
     () => (import.meta.env.VITE_API_BASE_URL as string) || '',
     [],
   )
+  // Basic Auth gate for API
+  const LS_KEY = 'td_basic_auth'
+  const [authReady, setAuthReady] = useState(false)
+  const [authChecking, setAuthChecking] = useState(true)
+  const [authError, setAuthError] = useState<string | null>(null)
+  const [authUser, setAuthUser] = useState('')
+  const [authPass, setAuthPass] = useState('')
+
+  function getAuthHeader(): string | null {
+    const saved = localStorage.getItem(LS_KEY)
+    return saved && saved.startsWith('Basic ') ? saved : null
+  }
+
+  function setAuthHeader(user: string, pass: string) {
+    const token = btoa(`${user}:${pass}`)
+    localStorage.setItem(LS_KEY, `Basic ${token}`)
+  }
+
+  async function authFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+    const headers = new Headers(init.headers || {})
+    const header = getAuthHeader()
+    if (header) headers.set('authorization', header)
+    return fetch(input, { ...init, headers })
+  }
+
+  async function checkAuth(): Promise<void> {
+    setAuthChecking(true)
+    setAuthError(null)
+    try {
+      let res = await fetch(`${apiBase}/health`)
+      if (res.status === 401) {
+        res = await authFetch(`${apiBase}/health`)
+      }
+      if (res.ok) setAuthReady(true)
+      else if (res.status === 401) setAuthReady(false)
+      else setAuthError(`API error: ${res.status}`)
+    } catch (e) {
+      setAuthError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setAuthChecking(false)
+    }
+  }
+
+  useEffect(() => { void checkAuth() }, [apiBase])
   const range = useMemo(() => defaultRange(), [])
 
   const [timelineView, setTimelineView] = useState<TimelineView>('list')
@@ -134,11 +178,11 @@ function App() {
 
       const contributionParams = new URLSearchParams({ from: fromDate, to: toDate })
       const [summaryRes, contributionRes, timelineRes, tagsRes, characterRes] = await Promise.all([
-        fetch(`${apiBase}/api/stats/summary`),
-        fetch(`${apiBase}/api/stats/contributions?${contributionParams.toString()}`),
-        fetch(`${apiBase}/api/memo/timeline?${timelineParams.toString()}`),
-        fetch(`${apiBase}/api/tags`),
-        fetch(`${apiBase}/api/character`),
+        authFetch(`${apiBase}/api/stats/summary`),
+        authFetch(`${apiBase}/api/stats/contributions?${contributionParams.toString()}`),
+        authFetch(`${apiBase}/api/memo/timeline?${timelineParams.toString()}`),
+        authFetch(`${apiBase}/api/tags`),
+        authFetch(`${apiBase}/api/character`),
       ])
 
       if (!summaryRes.ok) throw new Error(`summary API failed: ${summaryRes.status}`)
@@ -181,7 +225,7 @@ function App() {
   async function toggleResolved(memo: TimelineMemo): Promise<void> {
     setError(null)
     try {
-      const response = await fetch(`${apiBase}/api/memo/${memo.id}/resolve`, {
+      const response = await authFetch(`${apiBase}/api/memo/${memo.id}/resolve`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ resolved: memo.resolved !== 1 }),
@@ -210,7 +254,7 @@ function App() {
   async function openScreenshot(memoId: number): Promise<void> {
     setError(null)
     try {
-      const response = await fetch(`${apiBase}/api/memo/${memoId}/screenshot-url`)
+      const response = await authFetch(`${apiBase}/api/memo/${memoId}/screenshot-url`)
       if (!response.ok) throw new Error(`screenshot API failed: ${response.status}`)
       const data = (await response.json()) as { url: string }
       const resolvedUrl = data.url.startsWith('http') ? data.url : `${apiBase}${data.url}`
@@ -224,7 +268,7 @@ function App() {
   async function evolve(path: string): Promise<void> {
     setError(null)
     try {
-      const response = await fetch(`${apiBase}/api/character/evolve`, {
+      const response = await authFetch(`${apiBase}/api/character/evolve`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ path }),
@@ -243,7 +287,7 @@ function App() {
     setBlogLoading(true)
     setError(null)
     try {
-      const response = await fetch(`${apiBase}/api/ai/blog-draft`, {
+      const response = await authFetch(`${apiBase}/api/ai/blog-draft`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -271,6 +315,32 @@ function App() {
 
   return (
     <div className="page">
+      {!authReady ? (
+        <div className="auth-overlay">
+          <div className="auth-card">
+            <h3>Sign in</h3>
+            {authChecking ? <p className="meta">Checking server...</p> : null}
+            {authError ? <p className="error">{authError}</p> : null}
+            <form onSubmit={async (e) => {
+              e.preventDefault()
+              setAuthError(null)
+              try {
+                setAuthHeader(authUser, authPass)
+                const res = await authFetch(`${apiBase}/health`)
+                if (!res.ok) throw new Error(`Auth failed: ${res.status}`)
+                setAuthReady(true)
+              } catch (err) {
+                const detail = err instanceof Error ? err.message : String(err)
+                setAuthError(detail)
+              }
+            }}>
+              <input placeholder="Username" value={authUser} onChange={(e) => setAuthUser(e.currentTarget.value)} />
+              <input placeholder="Password" type="password" value={authPass} onChange={(e) => setAuthPass(e.currentTarget.value)} />
+              <button type="submit" disabled={authChecking || !authUser || !authPass}>Sign in</button>
+            </form>
+          </div>
+        </div>
+      ) : null}
       <header className="header">
         <div>
           <p className="eyebrow">Thought Drop</p>

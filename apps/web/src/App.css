@@ -477,6 +477,44 @@ button.danger:hover {
   font-size: 12px;
 }
 
+/* ===== AUTH OVERLAY ===== */
+.auth-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: grid;
+  place-items: center;
+  z-index: 9999;
+}
+
+.auth-card {
+  width: min(320px, 92vw);
+  background: #162840;
+  border: 3px solid #2a6090;
+  box-shadow: 6px 6px 0 0 #05101a;
+  padding: 14px;
+  display: grid;
+  gap: 8px;
+}
+
+.auth-card h3 {
+  margin: 0 0 4px;
+  color: #f0f8ff;
+}
+
+.auth-card input {
+  border: 2px solid #2a5878;
+  background: #162434;
+  color: #c0dcf0;
+}
+
+.auth-card button {
+  border: 2px solid #3098d8;
+  background: #1a5a90;
+  color: #e0f4ff;
+  font-weight: 800;
+}
+
 /* ===== RESPONSIVE ===== */
 @media (max-width: 1100px) {
   .layout {
