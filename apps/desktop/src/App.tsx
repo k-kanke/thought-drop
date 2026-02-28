@@ -1058,7 +1058,7 @@ function App() {
           <section className="agent-screen" aria-label="agent mode blank screen">
             <div className="agent-canvas">
               {agentMessages.length === 0 ? (
-                <p className="agent-ui-note">下の入力欄から質問してください。</p>
+                <p className="agent-ui-note">Type your question below.</p>
               ) : (
                 <div className="agent-messages">
                   {agentMessages.map((item, index) => (
@@ -1066,6 +1066,13 @@ function App() {
                       {item.text}
                     </div>
                   ))}
+                  {agentSending ? (
+                    <div className="agent-typing" aria-live="polite" aria-label="Generating">
+                      <span className="dot" />
+                      <span className="dot" />
+                      <span className="dot" />
+                    </div>
+                  ) : null}
                 </div>
               )}
               {agentError ? <p className="agent-error">{agentError}</p> : null}
@@ -1108,10 +1115,12 @@ function App() {
                 onKeyDown={(event) => {
                   if (event.key === "Enter") {
                     event.preventDefault();
-                    void submitAgentUiAsk();
+                    if (event.ctrlKey || event.metaKey) {
+                      void submitAgentUiAsk();
+                    }
                   }
                 }}
-                placeholder={agentWithScreenshot ? "スクショ付きで質問..." : "質問する..."}
+                placeholder={agentWithScreenshot ? "Ask with screenshot... (Ctrl+Enter to send)" : "Ask... (Ctrl+Enter to send)"}
                 value={agentInput}
               />
               <button
