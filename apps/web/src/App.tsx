@@ -399,14 +399,10 @@ function App() {
                           <p className="meta">
                             #{memo.id} {formatDateTime(memo.created_at)} / {displayStatus(memo)} / {memo.mode}
                           </p>
-                          <p className={`memo-content ${memo.content.length > MEMO_COLLAPSE_THRESHOLD && !expandedMemos.has(memo.id) ? 'collapsed' : ''}`}>
+                          <p className={`memo-content collapsed`}>
                             {memo.content}
                           </p>
-                          {memo.content.length > MEMO_COLLAPSE_THRESHOLD ? (
-                            <button type="button" className="expand-toggle" onClick={() => toggleMemoExpand(memo.id)}>
-                              {expandedMemos.has(memo.id) ? '折りたたむ ▲' : 'もっと見る ▼'}
-                            </button>
-                          ) : null}
+                          {/* expand toggle is disabled for uniform card height */}
                           <div className="row wrap">
                             {memo.tags.map((tag) => <span key={tag} className="pill">#{tag}</span>)}
                           </div>

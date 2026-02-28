@@ -331,6 +331,31 @@ label {
   background: #162840;
 }
 
+/* Uniform card size in 3-column board */
+.timeline-board .memo-card {
+  display: flex;
+  flex-direction: column;
+  height: 160px;
+}
+
+.timeline-board .memo-card .memo-content {
+  flex: 1;
+  overflow: hidden;
+}
+
+/* Smaller action buttons inside board cards */
+.timeline-board .memo-card .row {
+  gap: 6px;
+}
+
+.timeline-board .memo-card .row button {
+  padding: 4px 8px;
+  font-size: 11px;
+  height: 26px;
+  box-shadow: 2px 2px 0 0 #05101a;
+  border-width: 1px;
+}
+
 .memo-card p {
   margin: 6px 0;
   font-size: 13px;
