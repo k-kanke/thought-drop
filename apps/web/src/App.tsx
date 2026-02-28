@@ -76,7 +76,7 @@ function defaultRange(): { from: string; to: string } {
 
 function App() {
   const apiBase = useMemo(
-    () => (import.meta.env.VITE_API_BASE_URL as string) || 'http://127.0.0.1:3001',
+    () => (import.meta.env.VITE_API_BASE_URL as string) || '',
     [],
   )
   const range = useMemo(() => defaultRange(), [])
@@ -104,7 +104,7 @@ function App() {
   function toggleMemoExpand(id: number) {
     setExpandedMemos((prev) => {
       const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
+      if (next.has(id)) { next.delete(id) } else { next.add(id) }
       return next
     })
   }
