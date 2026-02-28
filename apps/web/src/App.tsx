@@ -378,40 +378,76 @@ function App() {
             </div>
 
             {timelineView === 'list' ? (
-              <div className="timeline-list">
-                {timelineMemos.length === 0 ? <p>データがありません。</p> : timelineMemos.map((memo) => (
-                  <article key={memo.id} className="memo-card">
-                    <p className="meta">
-                      #{memo.id} {formatDateTime(memo.created_at)} / {memo.status ?? '-'} / {memo.mode}
-                    </p>
-                    <p className={`memo-content ${memo.content.length > MEMO_COLLAPSE_THRESHOLD && !expandedMemos.has(memo.id) ? 'collapsed' : ''}`}>
-                      {memo.content}
-                    </p>
-                    {memo.content.length > MEMO_COLLAPSE_THRESHOLD ? (
-                      <button type="button" className="expand-toggle" onClick={() => toggleMemoExpand(memo.id)}>
-                        {expandedMemos.has(memo.id) ? '折りたたむ ▲' : 'もっと見る ▼'}
-                      </button>
-                    ) : null}
-                    <div className="row wrap">
-                      {memo.tags.map((tag) => <span key={tag} className="pill">#{tag}</span>)}
+              (() => {
+                // 分類ルール
+                // - 集中: status==='集中' && resolved!==1
+                // - 未解決: (status==='調査中' or '詰まり') && resolved!==1
+                // - 解決済み: resolved===1 or status==='レビュー待ち'
+                const focused = timelineMemos.filter((m) => m.status === '集中' && m.resolved !== 1);
+                const unresolved = timelineMemos.filter((m) => (m.status === '調査中' || m.status === '詰まり') && m.resolved !== 1);
+                const solved = timelineMemos.filter((m) => m.resolved === 1 || m.status === 'レビュー待ち');
+                function displayStatus(m: TimelineMemo): string {
+                  if (m.status === 'レビュー待ち' || m.resolved === 1) return '解決済み';
+                  return m.status ?? '-';
+                }
+                function MemoList({ items, showResolve = true }: { items: TimelineMemo[]; showResolve?: boolean }) {
+                  if (items.length === 0) return <p>データがありません。</p>;
+                  return (
+                    <div className="board-list">
+                      {items.map((memo) => (
+                        <article key={memo.id} className="memo-card">
+                          <p className="meta">
+                            #{memo.id} {formatDateTime(memo.created_at)} / {displayStatus(memo)} / {memo.mode}
+                          </p>
+                          <p className={`memo-content ${memo.content.length > MEMO_COLLAPSE_THRESHOLD && !expandedMemos.has(memo.id) ? 'collapsed' : ''}`}>
+                            {memo.content}
+                          </p>
+                          {memo.content.length > MEMO_COLLAPSE_THRESHOLD ? (
+                            <button type="button" className="expand-toggle" onClick={() => toggleMemoExpand(memo.id)}>
+                              {expandedMemos.has(memo.id) ? '折りたたむ ▲' : 'もっと見る ▼'}
+                            </button>
+                          ) : null}
+                          <div className="row wrap">
+                            {memo.tags.map((tag) => <span key={tag} className="pill">#{tag}</span>)}
+                          </div>
+                          {showResolve ? (
+                            <div className="row">
+                              <button
+                                type="button"
+                                className={memo.resolved === 1 ? 'ok' : 'warn'}
+                                onClick={() => void toggleResolved(memo)}
+                              >
+                                {memo.resolved === 1 ? '解決済み' : '未対応'}
+                              </button>
+                              {memo.screenshot_url ? (
+                                <button type="button" className="ghost" onClick={() => void openScreenshot(memo.id)}>
+                                  スクリーンショット
+                                </button>
+                              ) : null}
+                            </div>
+                          ) : null}
+                        </article>
+                      ))}
                     </div>
-                    <div className="row">
-                      <button
-                        type="button"
-                        className={memo.resolved === 1 ? 'ok' : 'warn'}
-                        onClick={() => void toggleResolved(memo)}
-                      >
-                        {memo.resolved === 1 ? '解決済み' : '未対応'}
-                      </button>
-                      {memo.screenshot_url ? (
-                        <button type="button" className="ghost" onClick={() => void openScreenshot(memo.id)}>
-                          スクリーンショット
-                        </button>
-                      ) : null}
+                  );
+                }
+                return (
+                  <div className="timeline-board">
+                    <div className="board-col">
+                      <h4>集中</h4>
+                      <MemoList items={focused} showResolve={false} />
                     </div>
-                  </article>
-                ))}
-              </div>
+                    <div className="board-col">
+                      <h4>未解決</h4>
+                      <MemoList items={unresolved} />
+                    </div>
+                    <div className="board-col">
+                      <h4>解決済み</h4>
+                      <MemoList items={solved} />
+                    </div>
+                  </div>
+                );
+              })()
             ) : (
               <div className="calendar-list">
                 {timelineDays.length === 0 ? <p>データがありません。</p> : timelineDays.map((day) => (
