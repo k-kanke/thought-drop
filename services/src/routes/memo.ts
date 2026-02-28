@@ -26,6 +26,7 @@ type QueryFilterInput = {
   from: string | null;
   to: string | null;
   tag: string;
+  q: string;
 };
 
 const EXT_BY_MIME: Record<string, string> = {
@@ -230,6 +231,11 @@ function buildMemoFilters(input: QueryFilterInput): { whereSql: string; params: 
     params.push(input.tag);
   }
 
+  if (input.q) {
+    whereClauses.push('m.content LIKE ?');
+    params.push(`%${input.q}%`);
+  }
+
   return {
     whereSql: whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '',
     params,
@@ -432,6 +438,7 @@ router.get('/timeline', (req: Request, res: Response) => {
   const from = parseDateFilter(req.query.from, 'from');
   const to = parseDateFilter(req.query.to, 'to');
   const tag = typeof req.query.tag === 'string' ? normalizeTagName(req.query.tag) : '';
+  const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
 
   if (resolved === null) {
     res.status(400).json({ error: 'resolved must be one of 0, 1, true, false' });
@@ -450,7 +457,7 @@ router.get('/timeline', (req: Request, res: Response) => {
     return;
   }
 
-  const { whereSql, params } = buildMemoFilters({ status, resolved, from, to, tag });
+  const { whereSql, params } = buildMemoFilters({ status, resolved, from, to, tag, q });
 
   if (view === 'calendar') {
     const days = db.prepare(`
@@ -540,7 +547,7 @@ router.get('/', (req: Request, res: Response) => {
     return;
   }
 
-  const { whereSql, params } = buildMemoFilters({ status, resolved, from, to, tag });
+  const { whereSql, params } = buildMemoFilters({ status, resolved, from, to, tag, q: '' });
   const rows = db.prepare(`
     SELECT
       m.id, m.content, m.status, m.sent_to_slack, m.resolved, m.created_at, m.mode, m.stuck_minutes,

@@ -82,6 +82,7 @@ function App() {
   const range = useMemo(() => defaultRange(), [])
 
   const [timelineView, setTimelineView] = useState<TimelineView>('list')
+  const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [tagFilter, setTagFilter] = useState('')
   const [resolvedFilter, setResolvedFilter] = useState<ResolvedFilter>('all')
@@ -126,6 +127,7 @@ function App() {
         from: fromDate,
         to: toDate,
       })
+      if (searchQuery) timelineParams.set('q', searchQuery)
       if (statusFilter) timelineParams.set('status', statusFilter)
       if (tagFilter) timelineParams.set('tag', tagFilter)
       if (resolvedFilter !== 'all') timelineParams.set('resolved', resolvedFilter)
@@ -170,7 +172,7 @@ function App() {
     } finally {
       setLoading(false)
     }
-  }, [apiBase, timelineView, statusFilter, tagFilter, resolvedFilter, fromDate, toDate])
+  }, [apiBase, timelineView, searchQuery, statusFilter, tagFilter, resolvedFilter, fromDate, toDate])
 
   useEffect(() => {
     void fetchDashboard()
@@ -329,6 +331,15 @@ function App() {
 
           <article className="panel">
             <h2>設定</h2>
+            <label>
+              検索
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.currentTarget.value)}
+                placeholder="キーワードで絞り込み"
+              />
+            </label>
             <label>
               開始日
               <input type="date" value={fromDate} onChange={(event) => setFromDate(event.currentTarget.value)} />
