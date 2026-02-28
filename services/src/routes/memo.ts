@@ -612,6 +612,37 @@ router.patch('/:id/resolve', (req: Request, res: Response) => {
   res.status(200).json({ id, resolved: nextResolved });
 });
 
+router.delete('/:id', (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: 'Invalid memo id' });
+    return;
+  }
+
+  const memo = db.prepare(`
+    SELECT id, status, resolved, created_at
+    FROM memos
+    WHERE id = ?
+  `).get(id) as { id: number; status: string | null; resolved: number; created_at: string } | undefined;
+
+  if (!memo) {
+    res.status(404).json({ error: 'Memo not found' });
+    return;
+  }
+
+  db.prepare('DELETE FROM memos WHERE id = ?').run(id);
+
+  const dateJst = toJstDateString(memo.created_at);
+  updateDailyStats(
+    dateJst,
+    -1,
+    memo.status === '詰まり' ? -1 : 0,
+    memo.resolved === 1 ? -1 : 0,
+  );
+
+  res.status(200).json({ id });
+});
+
 router.post('/:id/tags', (req: Request, res: Response) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id <= 0) {

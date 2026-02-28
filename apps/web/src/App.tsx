@@ -192,6 +192,19 @@ function App() {
     }
   }
 
+  async function deleteMemo(memoId: number): Promise<void> {
+    if (!window.confirm('このメモを削除しますか？')) return
+    setError(null)
+    try {
+      const response = await fetch(`${apiBase}/api/memo/${memoId}`, { method: 'DELETE' })
+      if (!response.ok) throw new Error(`delete failed: ${response.status}`)
+      void fetchDashboard()
+    } catch (unknownError) {
+      const detail = unknownError instanceof Error ? unknownError.message : String(unknownError)
+      setError(detail)
+    }
+  }
+
   async function openScreenshot(memoId: number): Promise<void> {
     setError(null)
     try {
@@ -406,8 +419,8 @@ function App() {
                           <div className="row wrap">
                             {memo.tags.map((tag) => <span key={tag} className="pill">#{tag}</span>)}
                           </div>
-                          {showResolve ? (
-                            <div className="row">
+                          <div className="row">
+                            {showResolve ? (
                               <button
                                 type="button"
                                 className={memo.resolved === 1 ? 'ok' : 'warn'}
@@ -415,13 +428,16 @@ function App() {
                               >
                                 {memo.resolved === 1 ? '解決済み' : '未対応'}
                               </button>
-                              {memo.screenshot_url ? (
-                                <button type="button" className="ghost" onClick={() => void openScreenshot(memo.id)}>
-                                  スクリーンショット
-                                </button>
-                              ) : null}
-                            </div>
-                          ) : null}
+                            ) : null}
+                            {memo.screenshot_url ? (
+                              <button type="button" className="ghost" onClick={() => void openScreenshot(memo.id)}>
+                                スクリーンショット
+                              </button>
+                            ) : null}
+                            <button type="button" className="danger" onClick={() => void deleteMemo(memo.id)}>
+                              削除
+                            </button>
+                          </div>
                         </article>
                       ))}
                     </div>
