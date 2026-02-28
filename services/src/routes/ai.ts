@@ -200,11 +200,13 @@ router.post('/ask-with-screenshot', async (req: Request, res: Response) => {
     message?: unknown;
     screenshotDataUrl?: unknown;
     user?: unknown;
+    useOcr?: unknown;
   };
 
   const message = typeof body.message === 'string' ? body.message.trim() : '';
   const screenshotDataUrl = typeof body.screenshotDataUrl === 'string' ? body.screenshotDataUrl.trim() : '';
   const user = typeof body.user === 'string' && body.user.trim() ? body.user.trim() : 'thought-drop-user';
+  const useOcr = Boolean(body.useOcr);
 
   if (!message) {
     res.status(400).json({ error: 'message is required' });
@@ -216,6 +218,7 @@ router.post('/ask-with-screenshot', async (req: Request, res: Response) => {
   const openaiApiKey = (process.env.OPENAI_API_KEY ?? '').trim();
 
   let signedImageUrl: string | undefined;
+  let uploadedInfo: { bucket: string; key: string; mime: string } | undefined;
   if (screenshotDataUrl) {
     if (!isS3UploadEnabled()) {
       res.status(503).json({ error: 'S3_BUCKET is required when screenshotDataUrl is provided' });
@@ -229,6 +232,7 @@ router.post('/ask-with-screenshot', async (req: Request, res: Response) => {
         extension: parsed.extension,
         createdAtIso: new Date().toISOString(),
       });
+      uploadedInfo = { bucket: uploaded.bucket, key: uploaded.key, mime: parsed.mimeType };
       signedImageUrl = await createSignedObjectUrl({
         bucket: uploaded.bucket,
         key: uploaded.key,
@@ -296,7 +300,7 @@ router.post('/ask-with-screenshot', async (req: Request, res: Response) => {
     return;
   }
 
-  // OpenAI fallback
+  // Optionally run OCR (v0: via LLM vision), then answer
   if (!openaiApiKey) {
     res.status(503).json({ error: 'Neither Dify nor OpenAI is configured. Set OPENAI_API_KEY or DIFY_ vars.' });
     return;
@@ -304,46 +308,285 @@ router.post('/ask-with-screenshot', async (req: Request, res: Response) => {
 
   try {
     const model = (process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL);
-    const contentParts: any[] = [{ type: 'text', text: message }];
-    if (signedImageUrl) {
-      contentParts.push({ type: 'image_url', image_url: { url: signedImageUrl, detail: 'high' } });
+
+    // v0 OCR: Use LLM to transcribe text when useOcr is true and image exists
+    let ocrText: string | undefined;
+    if (useOcr && signedImageUrl) {
+      const ocrPayload = {
+        model,
+        messages: [
+          { role: 'system', content: 'You transcribe on-screen text from an image. Output only plain text; no commentary.' },
+          { role: 'user', content: [
+            { type: 'text', text: 'Transcribe all visible text in the image. Keep line breaks.' },
+            { type: 'image_url', image_url: { url: signedImageUrl, detail: 'high' } },
+          ] },
+        ],
+        temperature: 0,
+      } as any;
+      const ocrResp = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST', headers: { Authorization: `Bearer ${openaiApiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(ocrPayload),
+      });
+      const ocrRaw = await ocrResp.text();
+      try {
+        const ocrParsed = ocrRaw ? JSON.parse(ocrRaw) : {};
+        const text = ocrParsed.choices?.[0]?.message?.content;
+        if (typeof text === 'string' && text.trim()) {
+          ocrText = text.trim();
+        }
+      } catch {/* ignore OCR parse errors */}
     }
-    const payload = {
+
+    // Build final answer prompt with OCR text included when available
+    const userParts: any[] = [{ type: 'text', text: message }];
+    if (ocrText) {
+      userParts.push({ type: 'text', text: `\n[OCR Extracted Text]\n${ocrText.slice(0, 6000)}` });
+    }
+    if (signedImageUrl) {
+      userParts.push({ type: 'image_url', image_url: { url: signedImageUrl, detail: 'high' } });
+    }
+    const answerPayload = {
       model,
       messages: [
-        { role: 'system', content: 'You are a concise assistant. If an image is provided, reference it directly.' },
-        { role: 'user', content: contentParts },
+        { role: 'system', content: 'You are a concise assistant. Use both the image and OCR text if provided. Provide concrete, actionable steps in Japanese.' },
+        { role: 'user', content: userParts },
       ],
       temperature: 0.2,
-    };
+    } as any;
 
-    const openaiResp = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${openaiApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
+    const answerResp = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST', headers: { Authorization: `Bearer ${openaiApiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(answerPayload),
     });
-
-    const raw = await openaiResp.text();
-    let parsed: any = {};
-    try { parsed = raw ? JSON.parse(raw) : {}; } catch { parsed = { raw }; }
-    if (!openaiResp.ok) {
-      res.status(502).json({ error: 'OpenAI API failed', status: openaiResp.status, detail: parsed });
+    const answerRaw = await answerResp.text();
+    let answerParsed: any = {};
+    try { answerParsed = answerRaw ? JSON.parse(answerRaw) : {}; } catch { answerParsed = { raw: answerRaw }; }
+    if (!answerResp.ok) {
+      res.status(502).json({ error: 'OpenAI API failed', status: answerResp.status, detail: answerParsed });
       return;
     }
-
-    const answer = typeof parsed.choices?.[0]?.message?.content === 'string'
-      ? parsed.choices[0].message.content
+    const answer = typeof answerParsed.choices?.[0]?.message?.content === 'string'
+      ? answerParsed.choices[0].message.content
       : '回答を取得できませんでした。';
+
+    // Persist ask
+    try {
+      db.prepare(`
+        INSERT INTO ai_asks (user, message, s3_bucket, s3_key, mime_type, ocr_text, answer, answer_model, usage_prompt_tokens, usage_completion_tokens)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        user,
+        message,
+        uploadedInfo?.bucket ?? null,
+        uploadedInfo?.key ?? null,
+        uploadedInfo?.mime ?? null,
+        ocrText ?? null,
+        answer,
+        model,
+        answerParsed.usage?.prompt_tokens ?? null,
+        answerParsed.usage?.completion_tokens ?? null,
+      );
+    } catch {/* ignore persist errors */}
+
     res.status(200).json({
       answer,
       mode: signedImageUrl ? 'ask-with-screenshot' : 'ask-only',
+      ocr: useOcr ? { included: Boolean(ocrText), length: ocrText?.length ?? 0 } : undefined,
     });
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     res.status(502).json({ error: `failed to call OpenAI API: ${detail}` });
+  }
+});
+
+// Streaming version: Ask with Screenshot (SSE)
+router.post('/ask-with-screenshot/stream', async (req: Request, res: Response) => {
+  const body = req.body as {
+    message?: unknown;
+    screenshotDataUrl?: unknown;
+    user?: unknown;
+    useOcr?: unknown;
+  };
+
+  const message = typeof body.message === 'string' ? body.message.trim() : '';
+  const screenshotDataUrl = typeof body.screenshotDataUrl === 'string' ? body.screenshotDataUrl.trim() : '';
+  const user = typeof body.user === 'string' && body.user.trim() ? body.user.trim() : 'thought-drop-user';
+  const useOcr = Boolean(body.useOcr);
+
+  if (!message) {
+    res.status(400).json({ error: 'message is required' });
+    return;
+  }
+
+  const difyBaseUrl = (process.env.DIFY_API_BASE_URL ?? '').trim().replace(/\/$/, '');
+  const difyApiKey = (process.env.DIFY_API_KEY ?? '').trim();
+  const openaiApiKey = (process.env.OPENAI_API_KEY ?? '').trim();
+  const model = (process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL);
+
+  // For streaming, we only support OpenAI path
+  if (!openaiApiKey) {
+    res.status(503).json({ error: 'OPENAI_API_KEY is required for streaming endpoint' });
+    return;
+  }
+
+  let signedImageUrl: string | undefined;
+  let uploadedInfo: { bucket: string; key: string; mime: string } | undefined;
+  if (screenshotDataUrl) {
+    if (!isS3UploadEnabled()) {
+      res.status(503).json({ error: 'S3_BUCKET is required when screenshotDataUrl is provided' });
+      return;
+    }
+    try {
+      const parsed = parseScreenshotDataUrl(screenshotDataUrl);
+      const uploaded = await uploadBufferToS3({
+        buffer: parsed.buffer,
+        mimeType: parsed.mimeType,
+        extension: parsed.extension,
+        createdAtIso: new Date().toISOString(),
+      });
+      uploadedInfo = { bucket: uploaded.bucket, key: uploaded.key, mime: parsed.mimeType };
+      signedImageUrl = await createSignedObjectUrl({ bucket: uploaded.bucket, key: uploaded.key, expiresInSec: 300 });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      res.status(400).json({ error: `failed to process screenshot: ${detail}` });
+      return;
+    }
+  }
+
+  // Optionally run OCR (synchronous, v0.5: via LLM vision)
+  let ocrText: string | undefined;
+  try {
+    if (useOcr && signedImageUrl) {
+      const ocrPayload = {
+        model,
+        messages: [
+          { role: 'system', content: 'You transcribe on-screen text from an image. Output only plain text; no commentary.' },
+          { role: 'user', content: [
+            { type: 'text', text: 'Transcribe all visible text in the image. Keep line breaks.' },
+            { type: 'image_url', image_url: { url: signedImageUrl, detail: 'high' } },
+          ] },
+        ],
+        temperature: 0,
+      } as any;
+      const ocrResp = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST', headers: { Authorization: `Bearer ${openaiApiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(ocrPayload),
+      });
+      const ocrRaw = await ocrResp.text();
+      try {
+        const ocrParsed = ocrRaw ? JSON.parse(ocrRaw) : {};
+        const text = ocrParsed.choices?.[0]?.message?.content;
+        if (typeof text === 'string' && text.trim()) {
+          ocrText = text.trim().slice(0, 6000);
+        }
+      } catch {}
+    }
+  } catch {}
+
+  // SSE headers
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  (res as any).flushHeaders?.();
+
+  let ended = false;
+  const endStream = (err?: unknown) => {
+    if (ended) return;
+    if (err) {
+      try { res.write(`event: error\n`); res.write(`data: ${JSON.stringify({ error: String(err) })}\n\n`); } catch {}
+    }
+    try { res.write(`event: done\n`); res.write(`data: [DONE]\n\n`); } catch {}
+    res.end(); ended = true;
+  };
+
+  // Persist ask shell (without answer yet)
+  let askId: number | undefined;
+  try {
+    const info = db.prepare(`
+      INSERT INTO ai_asks (user, message, s3_bucket, s3_key, mime_type, ocr_text, answer_model)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      user,
+      message,
+      uploadedInfo?.bucket ?? null,
+      uploadedInfo?.key ?? null,
+      uploadedInfo?.mime ?? null,
+      ocrText ?? null,
+      model,
+    );
+    askId = Number(info.lastInsertRowid);
+  } catch {}
+
+  try {
+    const userParts: any[] = [{ type: 'text', text: message }];
+    if (ocrText) userParts.push({ type: 'text', text: `\n[OCR]\n${ocrText}` });
+    if (signedImageUrl) userParts.push({ type: 'image_url', image_url: { url: signedImageUrl, detail: 'high' } });
+    const payload = {
+      model,
+      messages: [
+        { role: 'system', content: 'You are a concise assistant. Use both the image and OCR text if provided. Provide concrete, actionable steps in Japanese.' },
+        { role: 'user', content: userParts },
+      ],
+      temperature: 0.2,
+      stream: true,
+    } as any;
+
+    const upstream = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${openaiApiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!upstream.ok || !upstream.body) {
+      const raw = await upstream.text();
+      endStream({ status: upstream.status, raw });
+      return;
+    }
+
+    const decoder = new TextDecoder();
+    const reader = (upstream.body as any).getReader?.();
+    if (!reader) { endStream('stream reader not available'); return; }
+
+    let buffer = '';
+    let fullText = '';
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let idx;
+      while ((idx = buffer.indexOf('\n\n')) !== -1) {
+        const chunk = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + 2);
+        const lines = chunk.split('\n').map((l) => l.trim());
+        for (const line of lines) {
+          if (!line.startsWith('data:')) continue;
+          const data = line.slice(5).trim();
+          if (data === '[DONE]') { endStream(); return; }
+          try {
+            const json = JSON.parse(data) as any;
+            const delta: string | undefined = json.choices?.[0]?.delta?.content;
+            if (typeof delta === 'string' && delta) {
+              fullText += delta;
+              res.write(`data: ${JSON.stringify({ delta })}\n\n`);
+            }
+          } catch { /* ignore */ }
+        }
+      }
+    }
+
+    // finalize
+    try {
+      if (askId) {
+        db.prepare(`
+          UPDATE ai_asks
+          SET answer = ?, usage_prompt_tokens = COALESCE(usage_prompt_tokens, NULL), usage_completion_tokens = COALESCE(usage_completion_tokens, NULL)
+          WHERE id = ?
+        `).run(fullText || null, askId);
+      }
+    } catch {/* ignore */}
+    endStream();
+  } catch (err) {
+    endStream(err instanceof Error ? err.message : String(err));
   }
 });
 

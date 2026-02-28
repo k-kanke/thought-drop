@@ -352,25 +352,89 @@ function App() {
     }
 
     try {
-      const response = await fetch(`${apiBase}/api/ai/ask-with-screenshot`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          message: prompt,
-          screenshotDataUrl,
-          user: user.trim() || "thought-drop-user",
-        }),
-      });
-      const data = (await response.json().catch(() => ({}))) as { answer?: string; error?: string; detail?: unknown };
-      if (!response.ok) {
-        const detail = data.error ?? `API failed: ${response.status}`;
-        const extra = data.detail ? ` (${JSON.stringify(data.detail)})` : "";
-        throw new Error(`${detail}${extra}`);
+      if (agentWithScreenshot) {
+        // Streaming endpoint for ask-with-screenshot
+        // add assistant placeholder
+        setAgentMessages((current) => [...current, { role: "assistant", text: "" }]);
+        const response = await fetch(`${apiBase}/api/ai/ask-with-screenshot/stream`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            message: prompt,
+            screenshotDataUrl,
+            user: user.trim() || "thought-drop-user",
+            useOcr: true,
+          }),
+        });
+        if (!response.ok || !response.body) {
+          // fallback to non-streaming
+          const nonStream = await fetch(`${apiBase}/api/ai/ask-with-screenshot`, {
+            method: "POST", headers: { "content-type": "application/json" },
+            body: JSON.stringify({ message: prompt, screenshotDataUrl, user: user.trim() || "thought-drop-user", useOcr: true }),
+          });
+          const data = (await nonStream.json().catch(() => ({}))) as { answer?: string; error?: string; detail?: unknown };
+          if (!nonStream.ok) {
+            const detail = data.error ?? `API failed: ${nonStream.status}`;
+            const extra = data.detail ? ` (${JSON.stringify(data.detail)})` : "";
+            throw new Error(`${detail}${extra}`);
+          }
+          const answer = typeof data.answer === "string" && data.answer.trim() ? data.answer.trim() : "回答を取得できませんでした。";
+          setAgentMessages((prev) => {
+            const next = [...prev];
+            const last = next[next.length - 1];
+            if (last && last.role === "assistant") next[next.length - 1] = { ...last, text: answer };
+            return next;
+          });
+        } else {
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buf = "";
+          // eslint-disable-next-line no-constant-condition
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buf += decoder.decode(value, { stream: true });
+            let idx;
+            while ((idx = buf.indexOf("\n\n")) !== -1) {
+              const chunk = buf.slice(0, idx);
+              buf = buf.slice(idx + 2);
+              const lines = chunk.split("\n").map((l) => l.trim());
+              for (const line of lines) {
+                if (!line.startsWith("data:")) continue;
+                const payload = line.slice(5).trim();
+                if (!payload || payload === "[DONE]") continue;
+                try {
+                  const json = JSON.parse(payload) as { delta?: string };
+                  if (json.delta) {
+                    setAgentMessages((prev) => {
+                      const next = [...prev];
+                      const last = next[next.length - 1];
+                      if (!last || last.role !== "assistant") return prev;
+                      next[next.length - 1] = { ...last, text: last.text + json.delta };
+                      return next;
+                    });
+                  }
+                } catch { /* ignore */ }
+              }
+            }
+          }
+        }
+      } else {
+        // Ask only (no screenshot), non-stream fallback
+        const response = await fetch(`${apiBase}/api/ai/ask-with-screenshot`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ message: prompt, user: user.trim() || "thought-drop-user" }),
+        });
+        const data = (await response.json().catch(() => ({}))) as { answer?: string; error?: string; detail?: unknown };
+        if (!response.ok) {
+          const detail = data.error ?? `API failed: ${response.status}`;
+          const extra = data.detail ? ` (${JSON.stringify(data.detail)})` : "";
+          throw new Error(`${detail}${extra}`);
+        }
+        const answer = typeof data.answer === "string" && data.answer.trim() ? data.answer.trim() : "回答を取得できませんでした。";
+        setAgentMessages((current) => [...current, { role: "assistant", text: answer }]);
       }
-      const answer = typeof data.answer === "string" && data.answer.trim()
-        ? data.answer.trim()
-        : "回答を取得できませんでした。";
-      setAgentMessages((current) => [...current, { role: "assistant", text: answer }]);
     } catch (error: unknown) {
       const detail = error instanceof Error ? error.message : String(error);
       setAgentError(detail);
