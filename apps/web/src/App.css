@@ -404,7 +404,7 @@ label {
 .board-list {
   display: grid;
   gap: 8px;
-  max-height: 340px;
+  max-height: 640px;
   overflow-y: auto;
   padding-right: 4px;
 }
@@ -545,14 +545,8 @@ label {
 }
 
 /* ===== CALENDAR ===== */
-.timeline-list,
-.calendar-list {
-  display: grid;
-  gap: 8px;
-  max-height: 300px;
-  overflow-y: auto;
-  padding-right: 4px;
-}
+/* Removed legacy timeline-list/calendar-list sizes (board is default).
+   If needed, increase calendar-list height as well. */
 
 .timeline-list::-webkit-scrollbar,
 .calendar-list::-webkit-scrollbar { width: 4px; }
