@@ -532,6 +532,23 @@ function App() {
             </select>
           </article>
 
+          <article className="panel">
+            <h2>タグ</h2>
+            <div className="tag-list">
+              {tags.slice(0, 20).map((tag) => (
+                <button
+                  key={tag.id}
+                  type="button"
+                  className={`tag ${tagFilter === tag.name ? 'active' : ''}`}
+                  onClick={() => setTagFilter(tagFilter === tag.name ? '' : tag.name)}
+                >
+                  #{tag.name} ({tag.usage_count})
+                </button>
+              ))}
+              {tags.length === 0 && <p>タグなし</p>}
+            </div>
+          </article>
+
           {/* Digest Golem status: indicates periodic AI->Slack digests */}
           <DigestGolem />
         </aside>

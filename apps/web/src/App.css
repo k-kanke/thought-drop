@@ -590,6 +590,29 @@ label {
   line-height: 1.7;
 }
 
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tag {
+  background: transparent;
+  border: 1.5px solid rgba(90, 158, 201, 0.3);
+  border-radius: 50px;
+  color: #5A9EC9;
+  font-size: 0.72rem;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+.tag:hover {
+  border-color: rgba(90, 158, 201, 0.6);
+}
+.tag.active {
+  background: rgba(90, 158, 201, 0.15);
+  border-color: #5A9EC9;
+}
+
 .tag-edit-btn {
   font-size: 0.72rem;
   padding: 3px 10px;
