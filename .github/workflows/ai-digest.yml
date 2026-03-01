@@ -40,9 +40,6 @@ jobs:
       - name: Fetch memos (day range) and filter 30-min window
         id: fetch
         if: steps.meta.outputs.allow == 'true'
-        env:
-          API_BASE_URL: ${{ secrets.API_BASE_URL }}
-          BASIC_AUTH: ${{ secrets.BASIC_AUTH }}
         run: |
           DAY_FROM=$(echo "${{ steps.meta.outputs.from_utc }}" | cut -c1-10)
           DAY_TO=$(echo "${{ steps.meta.outputs.to_utc }}" | cut -c1-10)
@@ -65,6 +62,8 @@ jobs:
           COUNT=$(jq '.memos | length' filtered.json)
           echo "count=$COUNT" >> "$GITHUB_OUTPUT"
         env:
+          API_BASE_URL: ${{ secrets.API_BASE_URL }}
+          BASIC_AUTH: ${{ secrets.BASIC_AUTH }}
           FROM_UTC: ${{ steps.meta.outputs.from_utc }}
           TO_UTC: ${{ steps.meta.outputs.to_utc }}
 
@@ -74,14 +73,14 @@ jobs:
 
       - name: Build prompt and call OpenAI
         if: steps.fetch.outputs.count != '0'
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          FROM_UTC: ${{ steps.meta.outputs.from_utc }}
-          TO_UTC: ${{ steps.meta.outputs.to_utc }}
         run: |
           MEMO_LINES=$(jq -r '.memos[] | "- [" + (.created_at|tostring) + "] (" + ((.status//"-")|tostring) + ") " + (.content|tostring)' filtered.json | head -n 200)
-          SYSTEM="あなたはチームの記録係です。以下のメモから、日本語で簡潔なサマリを作ってください。箇条書きで、要点→対応→次回アクションの順に。必要なコマンドやコードは\`\`\`で囲んでください。誇張や推測は避け、ログに基づく根拠を簡潔に添えてください。"
-          USER=$'対象期間(UTC): '${FROM_UTC}'〜'${TO_UTC}$'\nメモ件数: '${{ steps.fetch.outputs.count }}$'\n\nログ:\n'"${MEMO_LINES}"
+          FROM_UTC='${{ steps.meta.outputs.from_utc }}'
+          TO_UTC='${{ steps.meta.outputs.to_utc }}'
+          SYS="あなたはチームの記録係です。以下のメモから、日本語で簡潔なサマリを作ってください。箇条書きで、要点→対応→次回アクションの順に。必要なコマンドやコードは\`\`\`で囲んでください。誇張や推測は避け、ログに基づく根拠を簡潔に添えてください。"
+          USR=$'対象期間(UTC): '${FROM_UTC}'〜'${TO_UTC}$'\nメモ件数: '${{ steps.fetch.outputs.count }}$'\n\nログ:\n'"${MEMO_LINES}"
+          export SYSTEM="$SYS"
+          export USER="$USR"
           node -e '
             const fs = require("fs");
             const fetch = global.fetch;
@@ -102,8 +101,7 @@ jobs:
             }).catch(e => { console.error(e); process.exit(1); });
           ' 
         env:
-          SYSTEM: ${{ env.SYSTEM }}
-          USER: ${{ env.USER }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
       - name: Post to Slack
         if: steps.fetch.outputs.count != '0'
