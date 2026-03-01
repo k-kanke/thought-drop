@@ -342,6 +342,11 @@ body {
   -webkit-app-region: no-drag;
 }
 
+.mode-btns {
+  display: flex;
+  gap: 6px;
+}
+
 .agent-switch {
   border: 2px solid #3098d8;
   border-radius: 0;
@@ -1117,6 +1122,147 @@ textarea {
 .agent-ask:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+/* === TODO PANEL === */
+.todo-screen {
+  margin-top: 8px;
+  border: 3px solid #2a6090;
+  background: #162840;
+  box-shadow: 4px 4px 0 0 #05101a;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+  overflow: hidden;
+  color: #cce4f4;
+}
+
+.todo-add-row {
+  display: flex;
+  gap: 6px;
+}
+
+.todo-input {
+  flex: 1;
+  height: 32px;
+  padding: 0 10px;
+  border: 2px solid #2a5878;
+  background: #162434;
+  color: #c0dcf0;
+  font-family: inherit;
+  font-size: 12px;
+  box-sizing: border-box;
+  border-radius: 0;
+  width: auto;
+  min-width: 0;
+}
+
+.todo-input:focus {
+  outline: none;
+  border-color: #3098d8;
+}
+
+.todo-add-btn {
+  height: 32px;
+  padding: 0 12px;
+  border: 2px solid #3098d8;
+  border-radius: 0;
+  background: #1a5a90;
+  color: #e0f4ff;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 3px 3px 0 0 #05101a;
+  flex-shrink: 0;
+}
+
+.todo-body {
+  max-height: 310px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.todo-body::-webkit-scrollbar { width: 4px; }
+.todo-body::-webkit-scrollbar-track { background: #0f2035; }
+.todo-body::-webkit-scrollbar-thumb { background: #2a6090; }
+
+.todo-empty {
+  margin: 0;
+  font-size: 12px;
+  color: #80c0e0;
+}
+
+.todo-done-label {
+  margin: 4px 0 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: #80c0e0;
+  border-top: 2px solid #2a5878;
+  padding-top: 8px;
+}
+
+.todo-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.todo-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 2px solid #2a5878;
+  background: #0f2035;
+}
+
+.todo-item.done {
+  opacity: 0.5;
+}
+
+.todo-check {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 14px;
+  color: #50c0e0;
+  cursor: pointer;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.todo-text {
+  flex: 1;
+  font-size: 12px;
+  color: #c8e0f4;
+  line-height: 1.4;
+  word-break: break-all;
+}
+
+.todo-item.done .todo-text {
+  text-decoration: line-through;
+}
+
+.todo-del {
+  background: none;
+  border: none;
+  padding: 0 2px;
+  font-size: 11px;
+  color: #446080;
+  cursor: pointer;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.todo-del:hover {
+  color: #e03858;
 }
 
 /* === アイドル: 呼吸のような拡縮＋ふわふわ === */
