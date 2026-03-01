@@ -77,7 +77,7 @@ jobs:
           MEMO_LINES=$(jq -r '.memos[] | "- [" + (.created_at|tostring) + "] (" + ((.status//"-")|tostring) + ") " + (.content|tostring)' filtered.json | head -n 200)
           FROM_UTC='${{ steps.meta.outputs.from_utc }}'
           TO_UTC='${{ steps.meta.outputs.to_utc }}'
-          SYS="あなたはチームの記録係です。以下のメモから、日本語で簡潔なサマリを作ってください。箇条書きで、要点→対応→次回アクションの順に。必要なコマンドやコードは\`\`\`で囲んでください。誇張や推測は避け、ログに基づく根拠を簡潔に添えてください。"
+          SYS="あなたはチームの記録係です。以下のメモから、日本語でSlack向けのサマリを作ってください。\n- 3セクションで構成: \n• 要点\n• 対応\n• 次回アクション\n- 各セクションは箇条書き、各3行以内。\n- コマンドやコードは\`\`\`で囲む。\n- 誇張や推測は避け、ログに基づく根拠を簡潔に示す。\n- Markdown (mrkdwn) で整形。"
           USR=$'対象期間(UTC): '${FROM_UTC}'〜'${TO_UTC}$'\nメモ件数: '${{ steps.fetch.outputs.count }}$'\n\nログ:\n'"${MEMO_LINES}"
           export SYSTEM="$SYS"
           export USER="$USR"
@@ -103,15 +103,31 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
-      - name: Post to Slack
+      - name: Post to Slack (Block Kit)
         if: steps.fetch.outputs.count != '0'
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           FROM_UTC: ${{ steps.meta.outputs.from_utc }}
           TO_UTC: ${{ steps.meta.outputs.to_utc }}
+          COUNT: ${{ steps.fetch.outputs.count }}
         run: |
-          HEADER="*自動サマリ (UTC ${FROM_UTC}〜${TO_UTC})*\n"
-          jq -n --arg t "$HEADER" --rawfile b digest.txt '{text: ($t + $b)}' > payload.json
-          curl -sS -f -X POST "$SLACK_WEBHOOK_URL" \
-            -H 'Content-Type: application/json' \
-            --data @payload.json
+          FROM_JST=$(TZ='Asia/Tokyo' date -d "${FROM_UTC}" '+%Y-%m-%d %H:%M') || FROM_JST="${FROM_UTC}"
+          TO_JST=$(TZ='Asia/Tokyo' date -d "${TO_UTC}" '+%Y-%m-%d %H:%M') || TO_JST="${TO_UTC}"
+          jq -n \
+            --arg from "$FROM_JST" \
+            --arg to "$TO_JST" \
+            --arg cnt "$COUNT" \
+            --rawfile body digest.txt \
+            '{
+              blocks: [
+                { type: "header", text: { type: "plain_text", text: "AI 自動サマリ", emoji: true } },
+                { type: "context", elements: [
+                    { type: "mrkdwn", text: ("期間: *JST* " + $from + " 〜 " + $to) },
+                    { type: "mrkdwn", text: ("件数: *" + $cnt + "*") }
+                  ]
+                },
+                { type: "divider" },
+                { type: "section", text: { type: "mrkdwn", text: $body } }
+              ]
+            }' > payload.json
+          curl -sS -f -X POST "$SLACK_WEBHOOK_URL" -H 'Content-Type: application/json' --data @payload.json
