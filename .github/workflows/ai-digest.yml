@@ -1,0 +1,119 @@
+name: ai-digest
+
+on:
+  schedule:
+    # 本番: 30分おき
+    - cron: '*/30 * * * *'
+  workflow_dispatch: {}
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install jq
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Compute period (last 30 minutes UTC) and JST time-window gate (10:00-17:00)
+        id: meta
+        run: |
+          FROM_UTC=$(date -u -Iseconds -d "30 minutes ago")
+          TO_UTC=$(date -u -Iseconds)
+          echo "from_utc=$FROM_UTC" >> "$GITHUB_OUTPUT"
+          echo "to_utc=$TO_UTC" >> "$GITHUB_OUTPUT"
+          # 常にJST 10:00–17:00 に限定
+          HOUR=$(TZ='Asia/Tokyo' date +%H)
+          MIN=$(TZ='Asia/Tokyo' date +%M)
+          if [ "$HOUR" -lt 10 ] || [ "$HOUR" -ge 17 ]; then
+            echo "allow=false" >> "$GITHUB_OUTPUT"
+            echo "Outside time window (JST ${HOUR}:${MIN}), skipping."
+            exit 0
+          fi
+          echo "allow=true" >> "$GITHUB_OUTPUT"
+
+      - name: Fetch memos (day range) and filter 30-min window
+        id: fetch
+        if: steps.meta.outputs.allow == 'true'
+        env:
+          API_BASE_URL: ${{ secrets.API_BASE_URL }}
+          BASIC_AUTH: ${{ secrets.BASIC_AUTH }}
+        run: |
+          DAY_FROM=$(echo "${{ steps.meta.outputs.from_utc }}" | cut -c1-10)
+          DAY_TO=$(echo "${{ steps.meta.outputs.to_utc }}" | cut -c1-10)
+          URL="${API_BASE_URL}/api/memo/timeline?view=list&from=${DAY_FROM}&to=${DAY_TO}&limit=500"
+          echo "GET $URL"
+          curl -sS -f -H "Authorization: ${BASIC_AUTH}" "$URL" -o raw.json
+          # 直近30分に絞り込み
+          node -e '
+            const fs = require("fs");
+            const raw = JSON.parse(fs.readFileSync("raw.json", "utf8"));
+            const memos = Array.isArray(raw.memos) ? raw.memos : [];
+            const fromTs = Date.parse(process.env.FROM_UTC);
+            const toTs = Date.parse(process.env.TO_UTC);
+            const within = memos.filter(m => {
+              const t = Date.parse(m.created_at);
+              return Number.isFinite(t) && t >= fromTs && t <= toTs;
+            });
+            fs.writeFileSync("filtered.json", JSON.stringify({ memos: within }));
+          ' 
+          COUNT=$(jq '.memos | length' filtered.json)
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+        env:
+          FROM_UTC: ${{ steps.meta.outputs.from_utc }}
+          TO_UTC: ${{ steps.meta.outputs.to_utc }}
+
+      - name: Skip when no memos in window
+        if: steps.fetch.outputs.count == '0'
+        run: echo "No memos in the last 10 minutes. Skipping."
+
+      - name: Build prompt and call OpenAI
+        if: steps.fetch.outputs.count != '0'
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          FROM_UTC: ${{ steps.meta.outputs.from_utc }}
+          TO_UTC: ${{ steps.meta.outputs.to_utc }}
+        run: |
+          MEMO_LINES=$(jq -r '.memos[] | "- [" + (.created_at|tostring) + "] (" + ((.status//"-")|tostring) + ") " + (.content|tostring)' filtered.json | head -n 200)
+          SYSTEM="あなたはチームの記録係です。以下のメモから、日本語で簡潔なサマリを作ってください。箇条書きで、要点→対応→次回アクションの順に。必要なコマンドやコードは\`\`\`で囲んでください。誇張や推測は避け、ログに基づく根拠を簡潔に添えてください。"
+          USER=$'対象期間(UTC): '${FROM_UTC}'〜'${TO_UTC}$'\nメモ件数: '${{ steps.fetch.outputs.count }}$'\n\nログ:\n'"${MEMO_LINES}"
+          node -e '
+            const fs = require("fs");
+            const fetch = global.fetch;
+            const system = process.env.SYSTEM;
+            const user = process.env.USER;
+            const apiKey = process.env.OPENAI_API_KEY;
+            fetch("https://api.openai.com/v1/chat/completions", {
+              method: "POST",
+              headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+              body: JSON.stringify({
+                model: "gpt-4o-mini",
+                messages: [{ role: "system", content: system }, { role: "user", content: user }],
+                temperature: 0.3
+              })
+            }).then(r => r.json()).then(j => {
+              const out = j?.choices?.[0]?.message?.content || "サマリを生成できませんでした。";
+              fs.writeFileSync("digest.txt", out);
+            }).catch(e => { console.error(e); process.exit(1); });
+          ' 
+        env:
+          SYSTEM: ${{ env.SYSTEM }}
+          USER: ${{ env.USER }}
+
+      - name: Post to Slack
+        if: steps.fetch.outputs.count != '0'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          FROM_UTC: ${{ steps.meta.outputs.from_utc }}
+          TO_UTC: ${{ steps.meta.outputs.to_utc }}
+        run: |
+          HEADER="*自動サマリ (UTC ${FROM_UTC}〜${TO_UTC})*\n"
+          jq -n --arg t "$HEADER" --rawfile b digest.txt '{text: ($t + $b)}' > payload.json
+          curl -sS -f -X POST "$SLACK_WEBHOOK_URL" \
+            -H 'Content-Type: application/json' \
+            --data @payload.json

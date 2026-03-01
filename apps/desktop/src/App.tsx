@@ -130,6 +130,21 @@ function App() {
     () => (import.meta.env.VITE_API_BASE_URL as string) || "http://127.0.0.1:3001",
     [],
   );
+  // Basic auth for API (env-driven, fallback to localStorage)
+  const basicUser = (import.meta.env.VITE_BASIC_AUTH_USER as string) || "";
+  const basicPass = (import.meta.env.VITE_BASIC_AUTH_PASS as string) || "";
+  const LS_AUTH_KEY = "td_basic_auth";
+  function getAuthHeader(): string | null {
+    if (basicUser && basicPass) return `Basic ${btoa(`${basicUser}:${basicPass}`)}`;
+    const saved = localStorage.getItem(LS_AUTH_KEY);
+    return saved && saved.startsWith("Basic ") ? saved : null;
+  }
+  async function authFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+    const headers = new Headers(init.headers || {});
+    const auth = getAuthHeader();
+    if (auth) headers.set("authorization", auth);
+    return fetch(input, { ...init, headers });
+  }
   const initialTdState = useMemo(() => loadTdState(), []);
   const [isOpen, setIsOpen] = useState(false);
   const [text, setText] = useState("");
@@ -193,7 +208,7 @@ function App() {
   useEffect(() => {
     async function fetchCharacter() {
       try {
-        const res = await fetch(`${apiBase}/api/character`);
+        const res = await authFetch(`${apiBase}/api/character`);
         if (!res.ok) return;
         const data = (await res.json()) as { points: number; hunger_level: number };
         setCharacterPoints(data.points);
@@ -356,7 +371,7 @@ function App() {
         // Streaming endpoint for ask-with-screenshot
         // add assistant placeholder
         setAgentMessages((current) => [...current, { role: "assistant", text: "" }]);
-        const response = await fetch(`${apiBase}/api/ai/ask-with-screenshot/stream`, {
+        const response = await authFetch(`${apiBase}/api/ai/ask-with-screenshot/stream`, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
@@ -368,7 +383,7 @@ function App() {
         });
         if (!response.ok || !response.body) {
           // fallback to non-streaming
-          const nonStream = await fetch(`${apiBase}/api/ai/ask-with-screenshot`, {
+          const nonStream = await authFetch(`${apiBase}/api/ai/ask-with-screenshot`, {
             method: "POST", headers: { "content-type": "application/json" },
             body: JSON.stringify({ message: prompt, screenshotDataUrl, user: user.trim() || "thought-drop-user", useOcr: true }),
           });
@@ -421,7 +436,7 @@ function App() {
         }
       } else {
         // Ask only (no screenshot), non-stream fallback
-        const response = await fetch(`${apiBase}/api/ai/ask-with-screenshot`, {
+        const response = await authFetch(`${apiBase}/api/ai/ask-with-screenshot`, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ message: prompt, user: user.trim() || "thought-drop-user" }),
@@ -696,7 +711,7 @@ function App() {
 
     setSending(true);
     try {
-      const response = await fetch(`${apiBase}/api/memo`, {
+      const response = await authFetch(`${apiBase}/api/memo`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -726,7 +741,7 @@ function App() {
         setSnoozeUntilMs(null);
         setReminderVisible(false);
         // メモ保存後にサーバーからポイント・空腹度を再取得してキャラクターを更新
-        fetch(`${apiBase}/api/character`)
+        authFetch(`${apiBase}/api/character`)
           .then((r) => r.ok ? r.json() : null)
           .then((data: { points: number; hunger_level: number } | null) => {
             if (data) {
