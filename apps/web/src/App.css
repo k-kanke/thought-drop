@@ -477,6 +477,45 @@ button.danger:hover {
   font-size: 12px;
 }
 
+/* ===== DIGEST GOLEM ===== */
+.golem-panel {
+  margin-bottom: 10px;
+}
+.golem-body {
+  display: grid;
+  grid-template-columns: 48px 1fr;
+  gap: 8px 12px;
+  align-items: start;
+}
+.golem-icon {
+  width: 36px;
+  height: 36px;
+  line-height: 1;
+}
+.golem-icon svg {
+  image-rendering: pixelated;
+  shape-rendering: crispEdges;
+}
+.golem-info h3 {
+  margin: 0 0 4px;
+  font-size: 13px;
+  color: #f0f8ff;
+}
+.golem-info ul {
+  margin: 0 0 6px;
+  padding-left: 16px;
+}
+.golem-info li {
+  font-size: 12px;
+  color: #cce4f4;
+}
+.golem-link {
+  display: inline-block;
+  font-size: 12px;
+  color: #5ad0f8;
+  text-decoration: underline;
+}
+
 /* ===== RESPONSIVE ===== */
 @media (max-width: 1100px) {
   .layout {
