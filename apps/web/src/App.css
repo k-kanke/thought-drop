@@ -505,6 +505,36 @@ label {
   padding: 3px 10px;
   font-size: 0.72rem;
   font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.pill-remove {
+  background: transparent;
+  border: none;
+  color: rgba(90, 158, 201, 0.5);
+  font-size: 12px;
+  padding: 0;
+  line-height: 1;
+  cursor: pointer;
+}
+.pill-remove:hover {
+  color: #e03858;
+}
+
+.tag-input-inline {
+  background: transparent;
+  border: 1.5px solid rgba(90, 158, 201, 0.3);
+  border-radius: 50px;
+  color: #5A9EC9;
+  font-size: 0.72rem;
+  padding: 3px 10px;
+  width: 80px;
+  outline: none;
+}
+.tag-input-inline:focus {
+  border-color: rgba(90, 158, 201, 0.7);
 }
 
 /* ===== CALENDAR ===== */
@@ -558,6 +588,19 @@ label {
   font-size: 0.85rem;
   font-family: 'Zen Maru Gothic', sans-serif;
   line-height: 1.7;
+}
+
+.tag-edit-btn {
+  font-size: 0.72rem;
+  padding: 3px 10px;
+  border: 1.5px solid rgba(90, 158, 201, 0.3);
+  border-radius: 50px;
+  color: #5A9EC9;
+  background: transparent;
+  cursor: pointer;
+}
+.tag-edit-btn:hover {
+  border-color: rgba(90, 158, 201, 0.6);
 }
 
 /* ===== ERROR ===== */

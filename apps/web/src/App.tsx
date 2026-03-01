@@ -147,6 +147,8 @@ function App() {
   const [error, setError] = useState<string | null>(null)
 
   const [expandedMemos, setExpandedMemos] = useState<Set<number>>(new Set())
+  const [editingTagsMemoId, setEditingTagsMemoId] = useState<number | null>(null)
+  const [tagInput, setTagInput] = useState('')
 
   const MEMO_COLLAPSE_THRESHOLD = 80 // この文字数を超えたら折りたたむ
 
@@ -257,6 +259,39 @@ function App() {
     } catch (unknownError) {
       const detail = unknownError instanceof Error ? unknownError.message : String(unknownError)
       setError(detail)
+    }
+  }
+
+  async function removeTag(memoId: number, currentTags: string[], tagToRemove: string): Promise<void> {
+    setError(null)
+    try {
+      const res = await fetch(`${apiBase}/api/memo/${memoId}/tags`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ tags: currentTags.filter((t) => t !== tagToRemove) }),
+      })
+      if (!res.ok) throw new Error(`tags update failed: ${res.status}`)
+      void fetchDashboard()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  async function addTag(memoId: number, currentTags: string[]): Promise<void> {
+    const tag = tagInput.trim().replace(/^#/, '').toLowerCase()
+    if (!tag || currentTags.includes(tag)) { setTagInput(''); return }
+    setError(null)
+    try {
+      const res = await fetch(`${apiBase}/api/memo/${memoId}/tags`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ tags: [...currentTags, tag] }),
+      })
+      if (!res.ok) throw new Error(`tags update failed: ${res.status}`)
+      setTagInput('')
+      void fetchDashboard()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
     }
   }
 
@@ -487,7 +522,33 @@ function App() {
                           </p>
                           {/* expand toggle is disabled for uniform card height */}
                           <div className="row wrap">
-                            {memo.tags.map((tag) => <span key={tag} className="pill">#{tag}</span>)}
+                            {memo.tags.map((tag) => (
+                              editingTagsMemoId === memo.id ? (
+                                <span key={tag} className="pill">
+                                  #{tag}
+                                  <button type="button" className="pill-remove" onClick={() => void removeTag(memo.id, memo.tags, tag)}>×</button>
+                                </span>
+                              ) : (
+                                <span key={tag} className="pill">#{tag}</span>
+                              )
+                            ))}
+                            {editingTagsMemoId === memo.id ? (
+                              <input
+                                type="text"
+                                className="tag-input-inline"
+                                value={tagInput}
+                                onChange={(e) => setTagInput(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') void addTag(memo.id, memo.tags)
+                                  if (e.key === 'Escape') { setEditingTagsMemoId(null); setTagInput('') }
+                                }}
+                                placeholder="#タグ"
+                                // eslint-disable-next-line jsx-a11y/no-autofocus
+                                autoFocus
+                              />
+                            ) : (
+                              <button type="button" className="tag-edit-btn" onClick={() => setEditingTagsMemoId(memo.id)}>+タグ</button>
+                            )}
                           </div>
                           <div className="row">
                             {showResolve ? (
