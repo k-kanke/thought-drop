@@ -160,8 +160,8 @@ function App() {
     })
   }
 
-  // Suppress TS unused warnings for collapsed board view
-  void expandedMemos; void MEMO_COLLAPSE_THRESHOLD; void toggleMemoExpand;
+
+  const [topStuckExpanded, setTopStuckExpanded] = useState(false)
 
   const [blogMode, setBlogMode] = useState<ModeFilter>('all')
   const [blogTitle, setBlogTitle] = useState('週次技術ログ')
@@ -578,7 +578,12 @@ function App() {
             </article>
             <article className="panel">
               <h3>今週一番詰まったトピック</h3>
-              <p>{insightTopStuck}</p>
+              <p className={topStuckExpanded ? 'stuck-text' : 'stuck-text clamped'}>{insightTopStuck}</p>
+              {insightTopStuck.length > 60 ? (
+                <button type="button" className="expand-toggle" onClick={() => setTopStuckExpanded(v => !v)}>
+                  {topStuckExpanded ? '▲ 折りたたむ' : '▼ 続きを読む'}
+                </button>
+              ) : null}
             </article>
           </section>
 
@@ -608,15 +613,22 @@ function App() {
                   if (items.length === 0) return <p>データがありません。</p>;
                   return (
                     <div className="board-list">
-                      {items.map((memo) => (
-                        <article key={memo.id} className="memo-card">
+                      {items.map((memo) => {
+                        const isExpanded = expandedMemos.has(memo.id)
+                        const isLong = memo.content.length > MEMO_COLLAPSE_THRESHOLD
+                        return (
+                        <article key={memo.id} className={`memo-card${isExpanded ? ' expanded' : ''}`}>
                           <p className="meta">
                             #{memo.id} {formatDateTime(memo.created_at)} / {displayStatus(memo)} / {memo.mode}
                           </p>
-                          <p className={`memo-content collapsed`}>
+                          <p className={`memo-content${isExpanded ? '' : ' collapsed'}`}>
                             {memo.content}
                           </p>
-                          {/* expand toggle is disabled for uniform card height */}
+                          {isLong ? (
+                            <button type="button" className="expand-toggle" onClick={() => toggleMemoExpand(memo.id)}>
+                              {isExpanded ? '▲ 折りたたむ' : '▼ 続きを読む'}
+                            </button>
+                          ) : null}
                           <div className="row wrap">
                             {memo.tags.map((tag) => (
                               editingTagsMemoId === memo.id ? (
@@ -666,7 +678,8 @@ function App() {
                             </button>
                           </div>
                         </article>
-                      ))}
+                        )
+                      })}
                     </div>
                   );
                 }
