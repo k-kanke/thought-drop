@@ -80,6 +80,53 @@ function App() {
     () => (import.meta.env.VITE_API_BASE_URL as string) || '',
     [],
   )
+  // Basic Auth gate for API
+  const LS_KEY = 'td_basic_auth'
+  const [authReady, setAuthReady] = useState(false)
+  const [authChecking, setAuthChecking] = useState(true)
+  const [authError, setAuthError] = useState<string | null>(null)
+  const [authUser, setAuthUser] = useState('')
+  const [authPass, setAuthPass] = useState('')
+
+  function getAuthHeader(): string | null {
+    const saved = localStorage.getItem(LS_KEY)
+    return saved && saved.startsWith('Basic ') ? saved : null
+  }
+
+  function setAuthHeader(user: string, pass: string) {
+    const token = btoa(`${user}:${pass}`)
+    localStorage.setItem(LS_KEY, `Basic ${token}`)
+  }
+
+  async function authFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+    const headers = new Headers(init.headers || {})
+    const header = getAuthHeader()
+    if (header) headers.set('authorization', header)
+    return fetch(input, { ...init, headers })
+  }
+
+  async function checkAuth(): Promise<void> {
+    setAuthChecking(true)
+    setAuthError(null)
+    try {
+      // Check a protected endpoint using any saved credentials.
+      // Do NOT rely on /health because it is intentionally public for platform health checks.
+      const res = await authFetch(`${apiBase}/api/tags`)
+      if (res.ok) {
+        setAuthReady(true)
+      } else if (res.status === 401) {
+        setAuthReady(false)
+      } else {
+        setAuthError(`API error: ${res.status}`)
+      }
+    } catch (e) {
+      setAuthError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setAuthChecking(false)
+    }
+  }
+
+  useEffect(() => { void checkAuth() }, [apiBase])
   const range = useMemo(() => defaultRange(), [])
 
   const [timelineView, setTimelineView] = useState<TimelineView>('list')
@@ -111,6 +158,9 @@ function App() {
     })
   }
 
+  // Suppress TS unused warnings for collapsed board view
+  void expandedMemos; void MEMO_COLLAPSE_THRESHOLD; void toggleMemoExpand;
+
   const [blogMode, setBlogMode] = useState<ModeFilter>('all')
   const [blogTitle, setBlogTitle] = useState('週次技術ログ')
   const [blogDraft, setBlogDraft] = useState('')
@@ -135,11 +185,11 @@ function App() {
 
       const contributionParams = new URLSearchParams({ from: fromDate, to: toDate })
       const [summaryRes, contributionRes, timelineRes, tagsRes, characterRes] = await Promise.all([
-        fetch(`${apiBase}/api/stats/summary`),
-        fetch(`${apiBase}/api/stats/contributions?${contributionParams.toString()}`),
-        fetch(`${apiBase}/api/memo/timeline?${timelineParams.toString()}`),
-        fetch(`${apiBase}/api/tags`),
-        fetch(`${apiBase}/api/character`),
+        authFetch(`${apiBase}/api/stats/summary`),
+        authFetch(`${apiBase}/api/stats/contributions?${contributionParams.toString()}`),
+        authFetch(`${apiBase}/api/memo/timeline?${timelineParams.toString()}`),
+        authFetch(`${apiBase}/api/tags`),
+        authFetch(`${apiBase}/api/character`),
       ])
 
       if (!summaryRes.ok) throw new Error(`summary API failed: ${summaryRes.status}`)
@@ -176,13 +226,15 @@ function App() {
   }, [apiBase, timelineView, searchQuery, statusFilter, tagFilter, resolvedFilter, fromDate, toDate])
 
   useEffect(() => {
-    void fetchDashboard()
-  }, [fetchDashboard])
+    if (authReady) {
+      void fetchDashboard()
+    }
+  }, [fetchDashboard, authReady])
 
   async function toggleResolved(memo: TimelineMemo): Promise<void> {
     setError(null)
     try {
-      const response = await fetch(`${apiBase}/api/memo/${memo.id}/resolve`, {
+      const response = await authFetch(`${apiBase}/api/memo/${memo.id}/resolve`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ resolved: memo.resolved !== 1 }),
@@ -211,7 +263,7 @@ function App() {
   async function openScreenshot(memoId: number): Promise<void> {
     setError(null)
     try {
-      const response = await fetch(`${apiBase}/api/memo/${memoId}/screenshot-url`)
+      const response = await authFetch(`${apiBase}/api/memo/${memoId}/screenshot-url`)
       if (!response.ok) throw new Error(`screenshot API failed: ${response.status}`)
       const data = (await response.json()) as { url: string }
       const resolvedUrl = data.url.startsWith('http') ? data.url : `${apiBase}${data.url}`
@@ -225,7 +277,7 @@ function App() {
   async function evolve(path: string): Promise<void> {
     setError(null)
     try {
-      const response = await fetch(`${apiBase}/api/character/evolve`, {
+      const response = await authFetch(`${apiBase}/api/character/evolve`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ path }),
@@ -244,7 +296,7 @@ function App() {
     setBlogLoading(true)
     setError(null)
     try {
-      const response = await fetch(`${apiBase}/api/ai/blog-draft`, {
+      const response = await authFetch(`${apiBase}/api/ai/blog-draft`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -272,65 +324,68 @@ function App() {
 
   return (
     <div className="page">
+      {!authReady ? (
+        <div className="auth-overlay">
+          <div className="auth-card">
+            <h3>Sign in</h3>
+            {authChecking ? <p className="meta">Checking server...</p> : null}
+            {authError ? <p className="error">{authError}</p> : null}
+            <form onSubmit={async (e) => {
+              e.preventDefault()
+              setAuthError(null)
+              try {
+                setAuthHeader(authUser, authPass)
+                const res = await authFetch(`${apiBase}/health`)
+                if (!res.ok) throw new Error(`Auth failed: ${res.status}`)
+                setAuthReady(true)
+              } catch (err) {
+                const detail = err instanceof Error ? err.message : String(err)
+                setAuthError(detail)
+              }
+            }}>
+              <input placeholder="Username" value={authUser} onChange={(e) => setAuthUser(e.currentTarget.value)} />
+              <input placeholder="Password" type="password" value={authPass} onChange={(e) => setAuthPass(e.currentTarget.value)} />
+              <button type="submit" disabled={authChecking || !authUser || !authPass}>Sign in</button>
+            </form>
+          </div>
+        </div>
+      ) : null}
       <header className="header">
         <div>
           <p className="eyebrow">Thought Drop</p>
           <h1>振り返りダッシュボード</h1>
         </div>
-        <button type="button" onClick={() => void fetchDashboard()} disabled={loading}>
-          {loading ? '更新中...' : '再読み込み'}
-        </button>
+        <div className="row">
+          <button type="button" className="primary" onClick={() => void fetchDashboard()} disabled={loading}>
+            {loading ? '更新中...' : '🔄 再読み込み'}
+          </button>
+        </div>
       </header>
 
       <section className="layout">
         <aside className="sidebar">
-          <article className="panel">
+          <article className="panel character-card">
             <h2>キャラクター</h2>
             {character ? (
               <div className="character">
-                <CharacterStage
-                  count={character.points}
-                  size={88}
-                  decayLevel={character.hunger_level >= 75 ? 2 : character.hunger_level >= 40 ? 1 : 0}
-                />
+                <div className="character-avatar-wrap">
+                  <CharacterStage
+                    count={character.points}
+                    size={72}
+                    decayLevel={character.hunger_level >= 75 ? 2 : character.hunger_level >= 40 ? 1 : 0}
+                  />
+                </div>
                 <div className="character-info">
-                  <p>Lv.{character.level} / {character.evolution_path}</p>
+                  <p className="level-badge">Lv.{character.level} / {character.evolution_path}</p>
                   <p>ポイント: {character.points}</p>
                   <p>空腹度: {character.hunger_level}</p>
                   <p>気分: {character.mood}</p>
                 </div>
-                <div className="row">
-                  <button type="button" className="ghost" onClick={() => void evolve('backend')}>バックエンド</button>
-                  <button type="button" className="ghost" onClick={() => void evolve('infrastructure')}>インフラ</button>
-                </div>
-                <ul className="items">
-                  {character.items.map((item) => (
-                    <li key={item.code} className={item.unlocked ? 'ok' : 'locked'}>
-                      {item.display_name}
-                    </li>
-                  ))}
-                </ul>
               </div>
             ) : <p>読み込み中...</p>}
           </article>
 
-          <article className="panel">
-            <h2>タグ</h2>
-            <div className="tag-list">
-              {tags.slice(0, 20).map((tag) => (
-                <button
-                  key={tag.id}
-                  type="button"
-                  className={`tag ${tagFilter === tag.name ? 'active' : ''}`}
-                  onClick={() => setTagFilter(tagFilter === tag.name ? '' : tag.name)}
-                >
-                  #{tag.name} ({tag.usage_count})
-                </button>
-              ))}
-            </div>
-          </article>
-
-          <article className="panel">
+          <article className="panel settings-card">
             <h2>設定</h2>
             <label>
               検索
@@ -368,7 +423,7 @@ function App() {
         </aside>
 
         <main className="content">
-          <section className="panel">
+          <section className="panel lawn-card">
             <h2>思考の芝生</h2>
             <div className="contrib">
               {contributions.map((cell) => (
