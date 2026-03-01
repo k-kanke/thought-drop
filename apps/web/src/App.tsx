@@ -1,6 +1,7 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { CharacterStage } from './components/characters'
 import './App.css'
+import { GolemPixel } from './components/GolemPixel'
 
 type Summary = {
   week: {
@@ -361,6 +362,9 @@ function App() {
               <option value="false">未対応</option>
             </select>
           </article>
+
+          {/* Digest Golem status: indicates periodic AI->Slack digests */}
+          <DigestGolem />
         </aside>
 
         <main className="content">
@@ -507,3 +511,60 @@ function App() {
 }
 
 export default App
+
+// ===== Digest Golem (status indicator for scheduled AI->Slack digest) =====
+function DigestGolem(): JSX.Element {
+  // Compute next run window in JST (every 30 min between 10:00-17:00)
+  function nextRunJst(date = new Date()): Date {
+    const toJstMs = (d: Date) => d.getTime() + 9 * 60 * 60 * 1000
+    const fromJstMs = (ms: number) => new Date(ms - 9 * 60 * 60 * 1000)
+    const jst = new Date(toJstMs(date))
+    let y = jst.getUTCFullYear()
+    let m = jst.getUTCMonth()
+    let d0 = jst.getUTCDate()
+    let h = jst.getUTCHours()
+    let min = jst.getUTCMinutes()
+    // snap to next :00 or :30
+    if (min < 30) {
+      min = 30
+    } else {
+      min = 0
+      h += 1
+    }
+    // constrain to 10:00–16:59 (17:00 excluded)
+    if (h < 10) {
+      h = 10; min = 0
+    } else if (h >= 17) {
+      // move to next day 10:00
+      const tmp = new Date(Date.UTC(y, m, d0, 10, 0, 0))
+      tmp.setUTCDate(tmp.getUTCDate() + 1)
+      return fromJstMs(tmp.getTime())
+    }
+    const next = new Date(Date.UTC(y, m, d0, h, min, 0))
+    return fromJstMs(next.getTime())
+  }
+
+  const now = new Date()
+  const next = nextRunJst(now)
+  const nextStr = next.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', hour12: false })
+  const actionsUrl = 'https://github.com/k-kanke/thought-drop/actions/workflows/ai-digest.yml'
+
+  return (
+    <section className="panel golem-panel" aria-label="digest golem status">
+      <div className="golem-body">
+        <div className="golem-icon" aria-hidden>
+          <GolemPixel size={36} />
+        </div>
+        <div className="golem-info">
+          <h3>自動サマリ配信（AIゴーレム）</h3>
+          <ul>
+            <li><strong>ステータス:</strong> 稼働中（JST 10:00–17:00）</li>
+            <li><strong>間隔:</strong> 30分ごと（Slackへ要約を投稿）</li>
+            <li><strong>次回:</strong> {nextStr}（JST）</li>
+          </ul>
+          <a href={actionsUrl} target="_blank" rel="noreferrer" className="golem-link">実行ログ（GitHub Actions）</a>
+        </div>
+      </div>
+    </section>
+  )
+}
