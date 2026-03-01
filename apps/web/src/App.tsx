@@ -1,4 +1,4 @@
-import { type FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { CharacterStage } from './components/characters'
 import './App.css'
 import { GolemPixel } from './components/GolemPixel'
@@ -58,7 +58,7 @@ type Tag = {
 
 type TimelineView = 'list' | 'calendar'
 type ResolvedFilter = 'all' | 'true' | 'false'
-type ModeFilter = 'all' | 'instant' | 'stockpile'
+// type ModeFilter = 'all' | 'instant' | 'stockpile' // removed: blog draft UI was deleted
 
 const STATUS_OPTIONS = ['集中', '調査中', '詰まり', 'レビュー待ち']
 
@@ -163,10 +163,7 @@ function App() {
 
   const [topStuckExpanded, setTopStuckExpanded] = useState(false)
 
-  const [blogMode, setBlogMode] = useState<ModeFilter>('all')
-  const [blogTitle, setBlogTitle] = useState('週次技術ログ')
-  const [blogDraft, setBlogDraft] = useState('')
-  const [blogLoading, setBlogLoading] = useState(false)
+  // Blog draft UI is removed
 
   // --- Insight Chatbot ---
   type InsightMessage = { role: 'user' | 'assistant'; content: string }
@@ -333,32 +330,7 @@ function App() {
     }
   }
 
-  async function generateDraft(event: FormEvent): Promise<void> {
-    event.preventDefault()
-    setBlogLoading(true)
-    setError(null)
-    try {
-      const response = await authFetch(`${apiBase}/api/ai/blog-draft`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          from: fromDate,
-          to: toDate,
-          tag: tagFilter || undefined,
-          mode: blogMode === 'all' ? undefined : blogMode,
-          title: blogTitle,
-        }),
-      })
-      if (!response.ok) throw new Error(`blog draft failed: ${response.status}`)
-      const data = (await response.json()) as { draft: string }
-      setBlogDraft(data.draft)
-    } catch (unknownError) {
-      const detail = unknownError instanceof Error ? unknownError.message : String(unknownError)
-      setError(detail)
-    } finally {
-      setBlogLoading(false)
-    }
-  }
+  // generateDraft removed with blog draft UI
 
   async function sendInsight(event: FormEvent): Promise<void> {
     event.preventDefault()
@@ -714,19 +686,7 @@ function App() {
             )}
           </section>
 
-          <section className="panel">
-            <h2>AI技術ブログ下書き</h2>
-            <form className="draft-form" onSubmit={(event) => void generateDraft(event)}>
-              <input value={blogTitle} onChange={(event) => setBlogTitle(event.currentTarget.value)} placeholder="タイトル" />
-              <select value={blogMode} onChange={(event) => setBlogMode(event.currentTarget.value as ModeFilter)}>
-                <option value="all">モード: すべて</option>
-                <option value="stockpile">ためるモード</option>
-                <option value="instant">即時モード</option>
-              </select>
-              <button type="submit" disabled={blogLoading}>{blogLoading ? '生成中...' : '下書き生成'}</button>
-            </form>
-            {blogDraft ? <pre className="draft">{blogDraft}</pre> : <p>期間を選択して生成してください。</p>}
-          </section>
+          {null}
         </main>
       </section>
 
