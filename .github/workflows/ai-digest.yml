@@ -2,8 +2,8 @@ name: ai-digest
 
 on:
   schedule:
-    # 一時検証: 5分おき（確認できたら */30 に戻す）
-    - cron: '*/5 * * * *'
+    # 本番: 30分おき
+    - cron: '*/30 * * * *'
   workflow_dispatch: {}
 
 jobs:
