@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import type { SyntheticEvent } from 'react'
 import { CharacterStage } from './components/characters'
 import './App.css'
 import { GolemPixel } from './components/GolemPixel'
@@ -319,7 +320,7 @@ function App() {
 
   // generateDraft removed with blog draft UI
 
-  async function sendInsight(event: FormEvent): Promise<void> {
+  async function sendInsight(event: SyntheticEvent): Promise<void> {
     event.preventDefault()
     setInsightLoading(true)
     setInsightError(null)
@@ -330,7 +331,7 @@ function App() {
     setInsightInput('')
 
     try {
-      const response = await fetch(`${apiBase}/api/ai/insight/stream`, {
+      const response = await authFetch(`${apiBase}/api/ai/insight/stream`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ from: insightFrom, to: insightTo, question: question || undefined }),
