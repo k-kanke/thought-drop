@@ -1,6 +1,7 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { CharacterStage } from './components/characters'
 import './App.css'
+import { GolemPixel } from './components/GolemPixel'
 
 type Summary = {
   week: {
@@ -146,6 +147,8 @@ function App() {
   const [error, setError] = useState<string | null>(null)
 
   const [expandedMemos, setExpandedMemos] = useState<Set<number>>(new Set())
+  const [editingTagsMemoId, setEditingTagsMemoId] = useState<number | null>(null)
+  const [tagInput, setTagInput] = useState('')
 
   const MEMO_COLLAPSE_THRESHOLD = 80 // この文字数を超えたら折りたたむ
 
@@ -160,12 +163,21 @@ function App() {
   // Suppress TS unused warnings for collapsed board view
   void expandedMemos; void MEMO_COLLAPSE_THRESHOLD; void toggleMemoExpand;
 
+  const [topStuckExpanded, setTopStuckExpanded] = useState(false)
+
   const [blogMode, setBlogMode] = useState<ModeFilter>('all')
   const [blogTitle, setBlogTitle] = useState('週次技術ログ')
   const [blogDraft, setBlogDraft] = useState('')
   const [blogLoading, setBlogLoading] = useState(false)
 
-  // Chat UI is not used on web frontend (removed)
+  // --- Insight Chatbot ---
+  type InsightMessage = { role: 'user' | 'assistant'; content: string }
+  const [insightMessages, setInsightMessages] = useState<InsightMessage[]>([])
+  const [insightInput, setInsightInput] = useState('')
+  const [insightLoading, setInsightLoading] = useState(false)
+  const [insightError, setInsightError] = useState<string | null>(null)
+  const [insightFrom, setInsightFrom] = useState(range.from)
+  const [insightTo, setInsightTo] = useState(range.to)
 
   const fetchDashboard = useCallback(async (): Promise<void> => {
     setLoading(true)
@@ -259,6 +271,39 @@ function App() {
     }
   }
 
+  async function removeTag(memoId: number, currentTags: string[], tagToRemove: string): Promise<void> {
+    setError(null)
+    try {
+      const res = await fetch(`${apiBase}/api/memo/${memoId}/tags`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ tags: currentTags.filter((t) => t !== tagToRemove) }),
+      })
+      if (!res.ok) throw new Error(`tags update failed: ${res.status}`)
+      void fetchDashboard()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  async function addTag(memoId: number, currentTags: string[]): Promise<void> {
+    const tag = tagInput.trim().replace(/^#/, '').toLowerCase()
+    if (!tag || currentTags.includes(tag)) { setTagInput(''); return }
+    setError(null)
+    try {
+      const res = await fetch(`${apiBase}/api/memo/${memoId}/tags`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ tags: [...currentTags, tag] }),
+      })
+      if (!res.ok) throw new Error(`tags update failed: ${res.status}`)
+      setTagInput('')
+      void fetchDashboard()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
   async function openScreenshot(memoId: number): Promise<void> {
     setError(null)
     try {
@@ -317,7 +362,79 @@ function App() {
     }
   }
 
-  // sendChat removed
+  async function sendInsight(event: FormEvent): Promise<void> {
+    event.preventDefault()
+    setInsightLoading(true)
+    setInsightError(null)
+
+    const question = insightInput.trim()
+    const userLabel = question || `${insightFrom} 〜 ${insightTo} のインサイト分析`
+    setInsightMessages((prev) => [...prev, { role: 'user', content: userLabel }])
+    setInsightInput('')
+
+    try {
+      const response = await fetch(`${apiBase}/api/ai/insight/stream`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ from: insightFrom, to: insightTo, question: question || undefined }),
+      })
+
+      // Handle JSON error response (e.g. no memos)
+      const contentType = response.headers.get('content-type') || ''
+      if (contentType.includes('application/json')) {
+        const data = await response.json()
+        if (data.error) {
+          setInsightMessages((prev) => [...prev, { role: 'assistant', content: data.error }])
+          return
+        }
+      }
+
+      if (!response.ok || !response.body) throw new Error(`insight stream failed: ${response.status}`)
+
+      setInsightMessages((prev) => [...prev, { role: 'assistant', content: '' }])
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buf = ''
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buf += decoder.decode(value, { stream: true })
+
+        let idx
+        while ((idx = buf.indexOf('\n\n')) !== -1) {
+          const chunk = buf.slice(0, idx)
+          buf = buf.slice(idx + 2)
+          const lines = chunk.split('\n').map((l) => l.trim())
+          for (const line of lines) {
+            if (!line.startsWith('data:')) continue
+            const payload = line.slice(5).trim()
+            if (!payload || payload === '[DONE]') continue
+            try {
+              const json = JSON.parse(payload) as { delta?: string }
+              if (json.delta) {
+                setInsightMessages((prev) => {
+                  const last = prev[prev.length - 1]
+                  if (!last || last.role !== 'assistant') return prev
+                  const updated = [...prev]
+                  updated[updated.length - 1] = { ...last, content: last.content + json.delta }
+                  return updated
+                })
+              }
+            } catch {
+              // ignore parse errors
+            }
+          }
+        }
+      }
+    } catch (unknownError) {
+      const detail = unknownError instanceof Error ? unknownError.message : String(unknownError)
+      setInsightError(detail)
+    } finally {
+      setInsightLoading(false)
+    }
+  }
 
   const insightTopStuck = summary?.top_stuck?.content ?? '該当なし'
 
@@ -354,60 +471,37 @@ function App() {
           <p className="eyebrow">Thought Drop</p>
           <h1>振り返りダッシュボード</h1>
         </div>
-        <button type="button" onClick={() => void fetchDashboard()} disabled={loading}>
-          {loading ? '更新中...' : '再読み込み'}
-        </button>
+        <div className="row">
+          <button type="button" className="primary" onClick={() => void fetchDashboard()} disabled={loading}>
+            {loading ? '更新中...' : '🔄 再読み込み'}
+          </button>
+        </div>
       </header>
 
       <section className="layout">
         <aside className="sidebar">
-          <article className="panel">
+          <article className="panel character-card">
             <h2>キャラクター</h2>
             {character ? (
               <div className="character">
-                <CharacterStage
-                  count={character.points}
-                  size={88}
-                  decayLevel={character.hunger_level >= 75 ? 2 : character.hunger_level >= 40 ? 1 : 0}
-                />
+                <div className="character-avatar-wrap">
+                  <CharacterStage
+                    count={character.points}
+                    size={72}
+                    decayLevel={character.hunger_level >= 75 ? 2 : character.hunger_level >= 40 ? 1 : 0}
+                  />
+                </div>
                 <div className="character-info">
-                  <p>Lv.{character.level} / {character.evolution_path}</p>
+                  <p className="level-badge">Lv.{character.level} / {character.evolution_path}</p>
                   <p>ポイント: {character.points}</p>
                   <p>空腹度: {character.hunger_level}</p>
                   <p>気分: {character.mood}</p>
                 </div>
-                <div className="row">
-                  <button type="button" className="ghost" onClick={() => void evolve('backend')}>バックエンド</button>
-                  <button type="button" className="ghost" onClick={() => void evolve('infrastructure')}>インフラ</button>
-                </div>
-                <ul className="items">
-                  {character.items.map((item) => (
-                    <li key={item.code} className={item.unlocked ? 'ok' : 'locked'}>
-                      {item.display_name}
-                    </li>
-                  ))}
-                </ul>
               </div>
             ) : <p>読み込み中...</p>}
           </article>
 
-          <article className="panel">
-            <h2>タグ</h2>
-            <div className="tag-list">
-              {tags.slice(0, 20).map((tag) => (
-                <button
-                  key={tag.id}
-                  type="button"
-                  className={`tag ${tagFilter === tag.name ? 'active' : ''}`}
-                  onClick={() => setTagFilter(tagFilter === tag.name ? '' : tag.name)}
-                >
-                  #{tag.name} ({tag.usage_count})
-                </button>
-              ))}
-            </div>
-          </article>
-
-          <article className="panel">
+          <article className="panel settings-card">
             <h2>設定</h2>
             <label>
               検索
@@ -439,10 +533,30 @@ function App() {
               <option value="false">未対応</option>
             </select>
           </article>
+
+          <article className="panel">
+            <h2>タグ</h2>
+            <div className="tag-list">
+              {tags.slice(0, 20).map((tag) => (
+                <button
+                  key={tag.id}
+                  type="button"
+                  className={`tag ${tagFilter === tag.name ? 'active' : ''}`}
+                  onClick={() => setTagFilter(tagFilter === tag.name ? '' : tag.name)}
+                >
+                  #{tag.name} ({tag.usage_count})
+                </button>
+              ))}
+              {tags.length === 0 && <p>タグなし</p>}
+            </div>
+          </article>
+
+          {/* Digest Golem status: indicates periodic AI->Slack digests */}
+          <DigestGolem />
         </aside>
 
         <main className="content">
-          <section className="panel">
+          <section className="panel lawn-card">
             <h2>思考の芝生</h2>
             <div className="contrib">
               {contributions.map((cell) => (
@@ -466,7 +580,12 @@ function App() {
             </article>
             <article className="panel">
               <h3>今週一番詰まったトピック</h3>
-              <p>{insightTopStuck}</p>
+              <p className={topStuckExpanded ? 'stuck-text' : 'stuck-text clamped'}>{insightTopStuck}</p>
+              {insightTopStuck.length > 60 ? (
+                <button type="button" className="expand-toggle" onClick={() => setTopStuckExpanded(v => !v)}>
+                  {topStuckExpanded ? '▲ 折りたたむ' : '▼ 続きを読む'}
+                </button>
+              ) : null}
             </article>
           </section>
 
@@ -496,17 +615,50 @@ function App() {
                   if (items.length === 0) return <p>データがありません。</p>;
                   return (
                     <div className="board-list">
-                      {items.map((memo) => (
-                        <article key={memo.id} className="memo-card">
+                      {items.map((memo) => {
+                        const isExpanded = expandedMemos.has(memo.id)
+                        const isLong = memo.content.length > MEMO_COLLAPSE_THRESHOLD
+                        return (
+                        <article key={memo.id} className={`memo-card${isExpanded ? ' expanded' : ''}`}>
                           <p className="meta">
                             #{memo.id} {formatDateTime(memo.created_at)} / {displayStatus(memo)} / {memo.mode}
                           </p>
-                          <p className={`memo-content collapsed`}>
+                          <p className={`memo-content${isExpanded ? '' : ' collapsed'}`}>
                             {memo.content}
                           </p>
-                          {/* expand toggle is disabled for uniform card height */}
+                          {isLong ? (
+                            <button type="button" className="expand-toggle" onClick={() => toggleMemoExpand(memo.id)}>
+                              {isExpanded ? '▲ 折りたたむ' : '▼ 続きを読む'}
+                            </button>
+                          ) : null}
                           <div className="row wrap">
-                            {memo.tags.map((tag) => <span key={tag} className="pill">#{tag}</span>)}
+                            {memo.tags.map((tag) => (
+                              editingTagsMemoId === memo.id ? (
+                                <span key={tag} className="pill">
+                                  #{tag}
+                                  <button type="button" className="pill-remove" onClick={() => void removeTag(memo.id, memo.tags, tag)}>×</button>
+                                </span>
+                              ) : (
+                                <span key={tag} className="pill">#{tag}</span>
+                              )
+                            ))}
+                            {editingTagsMemoId === memo.id ? (
+                              <input
+                                type="text"
+                                className="tag-input-inline"
+                                value={tagInput}
+                                onChange={(e) => setTagInput(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') void addTag(memo.id, memo.tags)
+                                  if (e.key === 'Escape') { setEditingTagsMemoId(null); setTagInput('') }
+                                }}
+                                placeholder="#タグ"
+                                // eslint-disable-next-line jsx-a11y/no-autofocus
+                                autoFocus
+                              />
+                            ) : (
+                              <button type="button" className="tag-edit-btn" onClick={() => setEditingTagsMemoId(memo.id)}>+タグ</button>
+                            )}
                           </div>
                           <div className="row">
                             {showResolve ? (
@@ -528,7 +680,8 @@ function App() {
                             </button>
                           </div>
                         </article>
-                      ))}
+                        )
+                      })}
                     </div>
                   );
                 }
@@ -580,8 +733,102 @@ function App() {
       </section>
 
       {error ? <p className="error">エラー: {error}</p> : null}
+
+      <section className="panel insight-chat-panel">
+        <h2>インサイト・チャットボット</h2>
+        <p className="insight-desc">期間を選択して「フィードを生成」を押すと、メモからトレンドや示唆を生成します。</p>
+        <form className="insight-form" onSubmit={(e) => void sendInsight(e)}>
+          <label>
+            開始
+            <input type="date" value={insightFrom} onChange={(e) => setInsightFrom(e.currentTarget.value)} />
+          </label>
+          <label>
+            終了
+            <input type="date" value={insightTo} onChange={(e) => setInsightTo(e.currentTarget.value)} />
+          </label>
+          <input
+            value={insightInput}
+            onChange={(e) => setInsightInput(e.currentTarget.value)}
+            placeholder="追加の質問（任意）..."
+            style={{ flex: 1 }}
+          />
+          <button type="submit" disabled={insightLoading}>
+            {insightLoading ? '生成中...' : 'フィードを生成'}
+          </button>
+        </form>
+        <div className="insight-messages">
+          {insightMessages.length === 0 ? (
+            <p className="insight-placeholder">期間を選択して分析を開始してください。メモの傾向やパターンをAIが読み解きます。</p>
+          ) : insightMessages.map((m, idx) => (
+            <div key={idx} className="insight-msg">
+              <strong className={m.role === 'user' ? 'insight-role-user' : 'insight-role-assistant'}>
+                {m.role === 'user' ? 'You' : 'Insight Bot'}
+              </strong>
+              <div style={{ whiteSpace: 'pre-wrap' }}>{m.content}</div>
+            </div>
+          ))}
+        </div>
+        {insightError ? <p className="error">インサイトエラー: {insightError}</p> : null}
+      </section>
     </div>
   )
 }
 
 export default App
+
+// ===== Digest Golem (status indicator for scheduled AI->Slack digest) =====
+function DigestGolem(): JSX.Element {
+  // Compute next run window in JST (every 30 min between 10:00-17:00)
+  function nextRunJst(date = new Date()): Date {
+    const toJstMs = (d: Date) => d.getTime() + 9 * 60 * 60 * 1000
+    const fromJstMs = (ms: number) => new Date(ms - 9 * 60 * 60 * 1000)
+    const jst = new Date(toJstMs(date))
+    let y = jst.getUTCFullYear()
+    let m = jst.getUTCMonth()
+    let d0 = jst.getUTCDate()
+    let h = jst.getUTCHours()
+    let min = jst.getUTCMinutes()
+    // snap to next :00 or :30
+    if (min < 30) {
+      min = 30
+    } else {
+      min = 0
+      h += 1
+    }
+    // constrain to 10:00–16:59 (17:00 excluded)
+    if (h < 10) {
+      h = 10; min = 0
+    } else if (h >= 17) {
+      // move to next day 10:00
+      const tmp = new Date(Date.UTC(y, m, d0, 10, 0, 0))
+      tmp.setUTCDate(tmp.getUTCDate() + 1)
+      return fromJstMs(tmp.getTime())
+    }
+    const next = new Date(Date.UTC(y, m, d0, h, min, 0))
+    return fromJstMs(next.getTime())
+  }
+
+  const now = new Date()
+  const next = nextRunJst(now)
+  const nextStr = next.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', hour12: false })
+  const actionsUrl = 'https://github.com/k-kanke/thought-drop/actions/workflows/ai-digest.yml'
+
+  return (
+    <section className="panel golem-panel" aria-label="digest golem status">
+      <div className="golem-body">
+        <div className="golem-icon" aria-hidden>
+          <GolemPixel size={36} />
+        </div>
+        <div className="golem-info">
+          <h3>自動サマリ配信（AIゴーレム）</h3>
+          <ul>
+            <li><strong>ステータス:</strong> 稼働中（JST 10:00–17:00）</li>
+            <li><strong>間隔:</strong> 30分ごと（Slackへ要約を投稿）</li>
+            <li><strong>次回:</strong> {nextStr}（JST）</li>
+          </ul>
+          <a href={actionsUrl} target="_blank" rel="noreferrer" className="golem-link">実行ログ（GitHub Actions）</a>
+        </div>
+      </div>
+    </section>
+  )
+}

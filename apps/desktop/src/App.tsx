@@ -23,7 +23,7 @@ type TimerNotice = {
   id: number;
   message: string;
 };
-type PanelMode = "memo" | "agent";
+type PanelMode = "memo" | "agent" | "todo";
 type AgentMessage = {
   role: "user" | "assistant" | "system";
   text: string;
@@ -36,6 +36,28 @@ type TdState = {
   memoCount: number;
 };
 
+
+const TODO_STORAGE_KEY = "td_todos";
+
+type Todo = {
+  id: number;
+  text: string;
+  done: boolean;
+};
+
+function loadTodos(): Todo[] {
+  try {
+    const raw = localStorage.getItem(TODO_STORAGE_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw) as Todo[];
+  } catch {
+    return [];
+  }
+}
+
+function saveTodos(todos: Todo[]): void {
+  localStorage.setItem(TODO_STORAGE_KEY, JSON.stringify(todos));
+}
 
 const STATUS_AURA: Record<Status, string> = {
   "集中": "status-focused",
@@ -151,6 +173,8 @@ function App() {
   const [status, setStatus] = useState<Status>("集中");
   const [statusOpen, setStatusOpen] = useState(false);
   const [panelMode, setPanelMode] = useState<PanelMode>("memo");
+  const [todos, setTodos] = useState<Todo[]>(loadTodos);
+  const [todoInput, setTodoInput] = useState("");
   const [agentInput, setAgentInput] = useState("");
   const [agentMenuOpen, setAgentMenuOpen] = useState(false);
   const [agentWithScreenshot, setAgentWithScreenshot] = useState(false);
@@ -342,6 +366,33 @@ function App() {
 
   function showTimerNotice(nextMessage: string) {
     setTimerNotice({ id: Date.now(), message: nextMessage });
+  }
+
+  function addTodo(): void {
+    const text = todoInput.trim();
+    if (!text) return;
+    setTodos((prev) => {
+      const next = [{ id: Date.now(), text, done: false }, ...prev];
+      saveTodos(next);
+      return next;
+    });
+    setTodoInput("");
+  }
+
+  function toggleTodo(id: number): void {
+    setTodos((prev) => {
+      const next = prev.map((t) => (t.id === id ? { ...t, done: !t.done } : t));
+      saveTodos(next);
+      return next;
+    });
+  }
+
+  function deleteTodo(id: number): void {
+    setTodos((prev) => {
+      const next = prev.filter((t) => t.id !== id);
+      saveTodos(next);
+      return next;
+    });
   }
 
   async function submitAgentUiAsk() {
@@ -875,14 +926,24 @@ function App() {
           <div className="drag-handle" data-tauri-drag-region title="drag" />
           <p className="eyebrow">Thought Drop</p>
           <div className="title-row">
-            <button
-              className={`agent-switch ${panelMode === "agent" ? "active" : ""}`}
-              onClick={() => setPanelMode((current) => (current === "memo" ? "agent" : "memo"))}
-              type="button"
-            >
-              <span className="agent-switch-icon" aria-hidden>🤖</span>
-              <span>{panelMode === "memo" ? "Agent" : "Memo"}</span>
-            </button>
+            <div className="mode-btns">
+              <button
+                className={`agent-switch ${panelMode === "agent" ? "active" : ""}`}
+                onClick={() => setPanelMode((current) => (current === "agent" ? "memo" : "agent"))}
+                type="button"
+              >
+                <span className="agent-switch-icon" aria-hidden>🤖</span>
+                <span>Agent</span>
+              </button>
+              <button
+                className={`agent-switch ${panelMode === "todo" ? "active" : ""}`}
+                onClick={() => setPanelMode((current) => (current === "todo" ? "memo" : "todo"))}
+                type="button"
+              >
+                <span className="agent-switch-icon" aria-hidden>☑</span>
+                <span>TODO</span>
+              </button>
+            </div>
             <div className="clock-controls" ref={clockRef}>
               <div className={`clock-pill ${activeTimeMode ? "active" : ""}`}>
                 {activeTimeMode ? (
@@ -1054,7 +1115,60 @@ function App() {
           </div>
         </header>
 
-        {panelMode === "memo" ? (
+        {panelMode === "todo" ? (
+          <section className="todo-screen">
+            <div className="todo-add-row">
+              <input
+                className="todo-input"
+                type="text"
+                value={todoInput}
+                onChange={(e) => setTodoInput(e.currentTarget.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") addTodo(); }}
+                placeholder="新しいタスク... (Enter で追加)"
+              />
+              <button className="todo-add-btn" type="button" onClick={addTodo}>追加</button>
+            </div>
+            <div className="todo-body">
+              {(() => {
+                const pending = todos.filter((t) => !t.done);
+                const done = todos.filter((t) => t.done);
+                return (
+                  <>
+                    {pending.length === 0 && done.length === 0 ? (
+                      <p className="todo-empty">タスクなし</p>
+                    ) : (
+                      <>
+                        <ul className="todo-list">
+                          {pending.map((todo) => (
+                            <li key={todo.id} className="todo-item">
+                              <button className="todo-check" type="button" onClick={() => toggleTodo(todo.id)}>▢</button>
+                              <span className="todo-text">{todo.text}</span>
+                              <button className="todo-del" type="button" onClick={() => deleteTodo(todo.id)}>✕</button>
+                            </li>
+                          ))}
+                        </ul>
+                        {done.length > 0 && (
+                          <>
+                            <p className="todo-done-label">完了済み ({done.length})</p>
+                            <ul className="todo-list">
+                              {done.map((todo) => (
+                                <li key={todo.id} className="todo-item done">
+                                  <button className="todo-check" type="button" onClick={() => toggleTodo(todo.id)}>▣</button>
+                                  <span className="todo-text">{todo.text}</span>
+                                  <button className="todo-del" type="button" onClick={() => deleteTodo(todo.id)}>✕</button>
+                                </li>
+                              ))}
+                            </ul>
+                          </>
+                        )}
+                      </>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+          </section>
+        ) : panelMode === "memo" ? (
           <>
             <div className="field">
               <label htmlFor="user-input">Name</label>

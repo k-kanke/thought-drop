@@ -749,4 +749,187 @@ router.post('/chat/stream', async (req: Request, res: Response) => {
   }
 });
 
+// ── Insight chatbot helpers ──
+
+interface InsightMemoRow {
+  id: number;
+  content: string;
+  status: string | null;
+  resolved: number;
+  created_at: string;
+  mode: string;
+  stuck_minutes: number;
+  tags: string;
+}
+
+function formatMemosForContext(memos: InsightMemoRow[]): string {
+  return memos.map((m, i) => {
+    const parts = [`[${i + 1}] ${formatJst(m.created_at)}`, `内容: ${m.content}`];
+    if (m.status) parts.push(`ステータス: ${m.status}`);
+    if (m.resolved) parts.push('解決済み');
+    if (m.stuck_minutes > 0) parts.push(`詰まり時間: ${m.stuck_minutes}分`);
+    if (m.tags) parts.push(`タグ: ${m.tags}`);
+    return parts.join(' | ');
+  }).join('\n');
+}
+
+function buildInsightSystemPrompt(from: string, to: string, count: number, memoContext: string): string {
+  return `あなたはソフトウェアエンジニアの思考ログを分析するアシスタントです。
+
+以下は${from}から${to}までの期間に記録された${count}件の思考メモです。各メモには投稿日時、内容、ステータス（集中/調査中/詰まり/レビュー待ち）、解決状態、タグなどが含まれています。
+
+--- 思考ログ ---
+${memoContext}
+--- ログ終わり ---
+
+上記のログを分析し、以下の観点でインサイトを提供してください：
+
+## 分析の観点
+1. **全体傾向**: この期間の活動パターン（忙しさ、集中度、作業リズム）
+2. **詰まりポイント**: 「詰まり」ステータスのメモに注目し、共通する課題やボトルネックを特定
+3. **成長・進捗**: 解決できた課題の傾向、学びのパターン
+4. **タグ分析**: よく出現するタグやトピックの傾向
+5. **改善提案**: 今後の作業効率を上げるための具体的な提案（2-3個）
+
+## 出力ルール
+- 日本語で回答すること
+- 各セクションは見出し（##）で区切ること
+- 具体的なメモの内容を引用しながら分析すること
+- 最後に「まとめ」セクションを入れること
+- 実用的で、エンジニアの日常改善に役立つアドバイスを含めること`;
+}
+
+// v2: Insight analysis streaming via Gemini (SSE)
+const GEMINI_API_KEY = 'AIzaSyD4pg6F532Bb7Edk3LnIni9kFDEwa6u7bM';
+const GEMINI_MODEL = 'gemini-2.5-flash';
+
+router.post('/insight/stream', async (req: Request, res: Response) => {
+  const body = req.body as { from?: unknown; to?: unknown; question?: unknown };
+  const from = normalizeDate(body.from);
+  const to = normalizeDate(body.to);
+  if (!from || !to || from > to) {
+    res.status(400).json({ error: 'from/to must be valid dates and from <= to' });
+    return;
+  }
+
+  const question = typeof body.question === 'string' ? body.question.trim() : '';
+
+  // Fetch memos for the period
+  const memos = db.prepare(`
+    SELECT m.id, m.content, m.status, m.resolved, m.created_at, m.mode, m.stuck_minutes,
+           COALESCE(GROUP_CONCAT(t.name), '') as tags
+    FROM memos m
+    LEFT JOIN memo_tags mt ON m.id = mt.memo_id
+    LEFT JOIN tags t ON mt.tag_id = t.id
+    WHERE date(datetime(m.created_at, '+9 hours')) BETWEEN ? AND ?
+    GROUP BY m.id
+    ORDER BY m.created_at ASC
+    LIMIT 500
+  `).all(from, to) as InsightMemoRow[];
+
+  if (memos.length === 0) {
+    res.status(200).json({ error: '対象期間にメモがありません。', count: 0 });
+    return;
+  }
+
+  const memoContext = formatMemosForContext(memos);
+  const systemPrompt = buildInsightSystemPrompt(from, to, memos.length, memoContext);
+  const userMessage = question || `${from}から${to}までの思考ログを分析して、インサイトを教えてください。`;
+
+  // SSE setup
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders?.();
+
+  let ended = false;
+  const endStream = (code?: number, detail?: unknown) => {
+    if (ended) return;
+    if (detail) {
+      try { res.write(`event: error\n`); res.write(`data: ${JSON.stringify(detail)}\n\n`); } catch {}
+    }
+    try { res.write(`event: done\n`); res.write(`data: [DONE]\n\n`); } catch {}
+    res.end();
+    ended = true;
+  };
+
+  try {
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:streamGenerateContent?alt=sse&key=${GEMINI_API_KEY}`;
+    const upstream = await fetch(geminiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        contents: [{ role: 'user', parts: [{ text: userMessage }] }],
+        generationConfig: { temperature: 0.4 },
+      }),
+    });
+
+    if (!upstream.ok || !upstream.body) {
+      const raw = await upstream.text();
+      endStream(502, { error: 'Gemini API failed', status: upstream.status, detail: raw });
+      return;
+    }
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+    const reader = (upstream.body as any).getReader?.();
+    if (!reader) {
+      endStream(500, { error: 'ReadableStream reader not available' });
+      return;
+    }
+
+    const processLine = (line: string) => {
+      line = line.trim();
+      if (!line.startsWith('data:')) return;
+      const data = line.slice(5).trim();
+      if (!data || data === '[DONE]') return;
+      try {
+        const json = JSON.parse(data) as any;
+        const text: string | undefined = json.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (typeof text === 'string' && text.length > 0) {
+          res.write(`data: ${JSON.stringify({ delta: text })}\n\n`);
+        }
+      } catch {
+        // ignore parse errors
+      }
+    };
+
+    const pump = async (): Promise<void> => {
+      try {
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+
+          // Gemini SSE uses \r\n\r\n or \n\n as delimiter
+          buffer = buffer.replace(/\r\n/g, '\n');
+          let idx;
+          while ((idx = buffer.indexOf('\n\n')) !== -1) {
+            const chunk = buffer.slice(0, idx);
+            buffer = buffer.slice(idx + 2);
+            for (const line of chunk.split('\n')) {
+              processLine(line);
+            }
+          }
+        }
+        // Process any remaining data in the buffer
+        if (buffer.trim()) {
+          for (const line of buffer.split('\n')) {
+            processLine(line);
+          }
+        }
+        endStream();
+      } catch (err) {
+        endStream(500, { error: 'stream error', detail: err instanceof Error ? err.message : String(err) });
+      }
+    };
+
+    void pump();
+  } catch (error) {
+    endStream(502, { error: 'failed to call Gemini API', detail: error instanceof Error ? error.message : String(error) });
+  }
+});
+
 export default router;
