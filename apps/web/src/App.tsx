@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import type { SyntheticEvent } from 'react'
 import { CharacterStage } from './components/characters'
 import './App.css'
 import { GolemPixel } from './components/GolemPixel'
@@ -160,6 +161,8 @@ function App() {
     })
   }
 
+  // Suppress TS unused warnings for collapsed board view
+  void expandedMemos; void MEMO_COLLAPSE_THRESHOLD; void toggleMemoExpand;
 
   const [topStuckExpanded, setTopStuckExpanded] = useState(false)
 
@@ -313,26 +316,11 @@ function App() {
     }
   }
 
-  async function evolve(path: string): Promise<void> {
-    setError(null)
-    try {
-      const response = await authFetch(`${apiBase}/api/character/evolve`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ path }),
-      })
-      if (!response.ok) throw new Error(`evolve failed: ${response.status}`)
-      const data = (await response.json()) as CharacterState
-      setCharacter(data)
-    } catch (unknownError) {
-      const detail = unknownError instanceof Error ? unknownError.message : String(unknownError)
-      setError(detail)
-    }
-  }
+  // evolve API is not used in current UI (buttons removed)
 
   // generateDraft removed with blog draft UI
 
-  async function sendInsight(event: FormEvent): Promise<void> {
+  async function sendInsight(event: SyntheticEvent): Promise<void> {
     event.preventDefault()
     setInsightLoading(true)
     setInsightError(null)
@@ -343,7 +331,7 @@ function App() {
     setInsightInput('')
 
     try {
-      const response = await fetch(`${apiBase}/api/ai/insight/stream`, {
+      const response = await authFetch(`${apiBase}/api/ai/insight/stream`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ from: insightFrom, to: insightTo, question: question || undefined }),
@@ -735,7 +723,7 @@ function App() {
 export default App
 
 // ===== Digest Golem (status indicator for scheduled AI->Slack digest) =====
-function DigestGolem(): JSX.Element {
+function DigestGolem() {
   // Compute next run window in JST (every 30 min between 10:00-17:00)
   function nextRunJst(date = new Date()): Date {
     const toJstMs = (d: Date) => d.getTime() + 9 * 60 * 60 * 1000
