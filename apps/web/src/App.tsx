@@ -58,27 +58,6 @@ type Tag = {
 type TimelineView = 'list' | 'calendar'
 type ResolvedFilter = 'all' | 'true' | 'false'
 type ModeFilter = 'all' | 'instant' | 'stockpile'
-type AppView = 'dashboard' | 'todo'
-
-type Todo = {
-  id: number
-  text: string
-  done: boolean
-}
-
-function loadTodos(): Todo[] {
-  try {
-    const raw = localStorage.getItem('td_todos')
-    if (!raw) return []
-    return JSON.parse(raw) as Todo[]
-  } catch {
-    return []
-  }
-}
-
-function saveTodos(todos: Todo[]): void {
-  localStorage.setItem('td_todos', JSON.stringify(todos))
-}
 
 const STATUS_OPTIONS = ['集中', '調査中', '詰まり', 'レビュー待ち']
 
@@ -148,37 +127,6 @@ function App() {
 
   useEffect(() => { void checkAuth() }, [apiBase])
   const range = useMemo(() => defaultRange(), [])
-
-  const [appView, setAppView] = useState<AppView>('dashboard')
-  const [todos, setTodos] = useState<Todo[]>(loadTodos)
-  const [todoInput, setTodoInput] = useState('')
-
-  function addTodo(): void {
-    const text = todoInput.trim()
-    if (!text) return
-    setTodos((prev) => {
-      const next = [{ id: Date.now(), text, done: false }, ...prev]
-      saveTodos(next)
-      return next
-    })
-    setTodoInput('')
-  }
-
-  function toggleTodo(id: number): void {
-    setTodos((prev) => {
-      const next = prev.map((t) => t.id === id ? { ...t, done: !t.done } : t)
-      saveTodos(next)
-      return next
-    })
-  }
-
-  function deleteTodo(id: number): void {
-    setTodos((prev) => {
-      const next = prev.filter((t) => t.id !== id)
-      saveTodos(next)
-      return next
-    })
-  }
 
   const [timelineView, setTimelineView] = useState<TimelineView>('list')
   const [searchQuery, setSearchQuery] = useState('')
@@ -407,82 +355,27 @@ function App() {
           <h1>振り返りダッシュボード</h1>
         </div>
         <div className="row">
-          <button
-            type="button"
-            className={appView === 'todo' ? 'active' : 'ghost'}
-            onClick={() => setAppView((v) => v === 'todo' ? 'dashboard' : 'todo')}
-          >
-            TODO
-          </button>
-          <button type="button" onClick={() => void fetchDashboard()} disabled={loading}>
-            {loading ? '更新中...' : '再読み込み'}
+          <button type="button" className="primary" onClick={() => void fetchDashboard()} disabled={loading}>
+            {loading ? '更新中...' : '🔄 再読み込み'}
           </button>
         </div>
       </header>
 
-      {appView === 'todo' ? (
-        <section className="todo-panel">
-          <div className="todo-add-row">
-            <input
-              type="text"
-              value={todoInput}
-              onChange={(e) => setTodoInput(e.currentTarget.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') addTodo() }}
-              placeholder="新しいタスクを入力... (Enter で追加)"
-            />
-            <button type="button" onClick={addTodo}>追加</button>
-          </div>
-          {(() => {
-            const pending = todos.filter((t) => !t.done)
-            const done = todos.filter((t) => t.done)
-            return (
-              <>
-                <div className="todo-section">
-                  <h3>未完了 ({pending.length})</h3>
-                  {pending.length === 0 ? <p>タスクなし</p> : (
-                    <ul className="todo-list">
-                      {pending.map((todo) => (
-                        <li key={todo.id} className="todo-item">
-                          <button type="button" className="todo-check" onClick={() => toggleTodo(todo.id)}>▢</button>
-                          <span className="todo-text">{todo.text}</span>
-                          <button type="button" className="todo-del" onClick={() => deleteTodo(todo.id)}>✕</button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-                {done.length > 0 && (
-                  <div className="todo-section">
-                    <h3>完了済み ({done.length})</h3>
-                    <ul className="todo-list">
-                      {done.map((todo) => (
-                        <li key={todo.id} className="todo-item done">
-                          <button type="button" className="todo-check done" onClick={() => toggleTodo(todo.id)}>▣</button>
-                          <span className="todo-text">{todo.text}</span>
-                          <button type="button" className="todo-del" onClick={() => deleteTodo(todo.id)}>✕</button>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </>
-            )
-          })()}
-        </section>
-      ) : (
       <section className="layout">
         <aside className="sidebar">
-          <article className="panel">
+          <article className="panel character-card">
             <h2>キャラクター</h2>
             {character ? (
               <div className="character">
-                <CharacterStage
-                  count={character.points}
-                  size={88}
-                  decayLevel={character.hunger_level >= 75 ? 2 : character.hunger_level >= 40 ? 1 : 0}
-                />
+                <div className="character-avatar-wrap">
+                  <CharacterStage
+                    count={character.points}
+                    size={72}
+                    decayLevel={character.hunger_level >= 75 ? 2 : character.hunger_level >= 40 ? 1 : 0}
+                  />
+                </div>
                 <div className="character-info">
-                  <p>Lv.{character.level} / {character.evolution_path}</p>
+                  <p className="level-badge">Lv.{character.level} / {character.evolution_path}</p>
                   <p>ポイント: {character.points}</p>
                   <p>空腹度: {character.hunger_level}</p>
                   <p>気分: {character.mood}</p>
@@ -491,8 +384,7 @@ function App() {
             ) : <p>読み込み中...</p>}
           </article>
 
-
-          <article className="panel">
+          <article className="panel settings-card">
             <h2>設定</h2>
             <label>
               検索
@@ -527,7 +419,7 @@ function App() {
         </aside>
 
         <main className="content">
-          <section className="panel">
+          <section className="panel lawn-card">
             <h2>思考の芝生</h2>
             <div className="contrib">
               {contributions.map((cell) => (
@@ -663,7 +555,6 @@ function App() {
           </section>
         </main>
       </section>
-      )}
 
       {error ? <p className="error">エラー: {error}</p> : null}
     </div>
