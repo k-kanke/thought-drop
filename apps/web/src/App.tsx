@@ -262,7 +262,7 @@ function App() {
     if (!window.confirm('このメモを削除しますか？')) return
     setError(null)
     try {
-      const response = await fetch(`${apiBase}/api/memo/${memoId}`, { method: 'DELETE' })
+      const response = await authFetch(`${apiBase}/api/memo/${memoId}`, { method: 'DELETE' })
       if (!response.ok) throw new Error(`delete failed: ${response.status}`)
       void fetchDashboard()
     } catch (unknownError) {
@@ -274,7 +274,7 @@ function App() {
   async function removeTag(memoId: number, currentTags: string[], tagToRemove: string): Promise<void> {
     setError(null)
     try {
-      const res = await fetch(`${apiBase}/api/memo/${memoId}/tags`, {
+      const res = await authFetch(`${apiBase}/api/memo/${memoId}/tags`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ tags: currentTags.filter((t) => t !== tagToRemove) }),
@@ -291,7 +291,7 @@ function App() {
     if (!tag || currentTags.includes(tag)) { setTagInput(''); return }
     setError(null)
     try {
-      const res = await fetch(`${apiBase}/api/memo/${memoId}/tags`, {
+      const res = await authFetch(`${apiBase}/api/memo/${memoId}/tags`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ tags: [...currentTags, tag] }),
