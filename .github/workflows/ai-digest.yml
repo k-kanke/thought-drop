@@ -1,7 +1,7 @@
 name: ai-digest
 
 on:
-  schedule:
+  "schedule:
     # 一時検証: 5分おき（確認できたら */30 に戻す）
     - cron: '*/5 * * * *'
   workflow_dispatch: {}
